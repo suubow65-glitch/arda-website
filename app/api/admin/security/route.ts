@@ -6,43 +6,66 @@ const CREDENTIALS_ID = "00000000-0000-0000-0000-000000000001";
 
 export async function GET() {
   const { error, supabase } = await requireAdmin();
-  if (error || !supabase) return error!;
-  const { data, error: queryError } = await supabase
-    .from("admin_credentials")
-    .select("*")
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (queryError) {
-    return NextResponse.json({ error: queryError.message }, { status: 400 });
+  if (error) return error;
+  if (!supabase) {
+    return NextResponse.json(
+      { error: "Supabase is not configured. Add URL and keys to .env.local." },
+      { status: 503 }
+    );
   }
-  return NextResponse.json({ credentials: data as AdminCredentialRow | null });
+  try {
+    const { data, error: queryError } = await supabase
+      .from("admin_credentials")
+      .select("*")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (queryError) {
+      console.error("admin_credentials GET error:", queryError.message);
+      return NextResponse.json({ credentials: null });
+    }
+    return NextResponse.json({ credentials: data as AdminCredentialRow | null });
+  } catch (err) {
+    console.error("admin_credentials GET exception:", err);
+    return NextResponse.json({ credentials: null });
+  }
 }
 
 export async function POST(request: Request) {
   const { error, supabase } = await requireAdmin();
-  if (error || !supabase) return error!;
-  const body = (await request.json()) as { email?: string; passcode?: string };
-  const email = body.email?.trim();
-  const passcode = body.passcode?.trim();
-  if (!email || !passcode) {
+  if (error) return error;
+  if (!supabase) {
     return NextResponse.json(
-      { error: "Email and passcode are required." },
-      { status: 400 }
+      { error: "Supabase is not configured. Add URL and keys to .env.local." },
+      { status: 503 }
     );
   }
-  const { data, error: upsertError } = await supabase
-    .from("admin_credentials")
-    .upsert({
-      id: CREDENTIALS_ID,
-      email,
-      passcode,
-      updated_at: new Date().toISOString(),
-    })
-    .select("*")
-    .single();
-  if (upsertError) {
-    return NextResponse.json({ error: upsertError.message }, { status: 400 });
+  try {
+    const body = (await request.json()) as { email?: string; passcode?: string };
+    const email = body.email?.trim();
+    const passcode = body.passcode?.trim();
+    if (!email || !passcode) {
+      return NextResponse.json(
+        { error: "Email and passcode are required." },
+        { status: 400 }
+      );
+    }
+    const { data, error: upsertError } = await supabase
+      .from("admin_credentials")
+      .upsert({
+        id: CREDENTIALS_ID,
+        email,
+        passcode,
+        updated_at: new Date().toISOString(),
+      })
+      .select("*")
+      .single();
+    if (upsertError) {
+      return NextResponse.json({ error: upsertError.message }, { status: 400 });
+    }
+    return NextResponse.json({ credentials: data as AdminCredentialRow });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Save failed.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-  return NextResponse.json({ credentials: data as AdminCredentialRow });
 }

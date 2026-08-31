@@ -5,45 +5,66 @@ type Params = { params: { id: string } };
 
 export async function PATCH(request: Request, { params }: Params) {
   const { error, supabase } = await requireAdmin();
-  if (error || !supabase) return error!;
+  if (error) return error;
+  if (!supabase) {
+    return NextResponse.json(
+      { error: "Supabase is not configured. Add URL and keys to .env.local." },
+      { status: 503 }
+    );
+  }
+  try {
+    const form = await request.formData();
+    const file = form.get("file") as File | null;
+    const updates: Record<string, unknown> = {};
 
-  const form = await request.formData();
-  const file = form.get("file") as File | null;
-  const updates: Record<string, unknown> = {};
+    const stringFields = ["title", "type", "location", "deadline", "description", "status"];
+    for (const key of stringFields) {
+      const value = form.get(key);
+      if (typeof value === "string") updates[key] = value;
+    }
+    if (form.get("order_index") != null) {
+      updates.order_index = Number(form.get("order_index"));
+    }
+    if (file && file.size > 0) {
+      updates.file_url = await uploadPublicFile(supabase, "vacancy-files", file);
+    }
 
-  const stringFields = ["title", "type", "location", "deadline", "description", "status"];
-  for (const key of stringFields) {
-    const value = form.get(key);
-    if (typeof value === "string") updates[key] = value;
+    const { data, error: updateError } = await supabase
+      .from("vacancies")
+      .update(updates)
+      .eq("id", params.id)
+      .select("*")
+      .single();
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 400 });
+    }
+    return NextResponse.json({ vacancy: data });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Update failed.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-  if (form.get("order_index") != null) {
-    updates.order_index = Number(form.get("order_index"));
-  }
-  if (file && file.size > 0) {
-    updates.file_url = await uploadPublicFile(supabase, "vacancy-files", file);
-  }
-
-  const { data, error: updateError } = await supabase
-    .from("vacancies")
-    .update(updates)
-    .eq("id", params.id)
-    .select("*")
-    .single();
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 400 });
-  }
-  return NextResponse.json({ vacancy: data });
 }
 
 export async function DELETE(_request: Request, { params }: Params) {
   const { error, supabase } = await requireAdmin();
-  if (error || !supabase) return error!;
-  const { error: deleteError } = await supabase
-    .from("vacancies")
-    .delete()
-    .eq("id", params.id);
-  if (deleteError) {
-    return NextResponse.json({ error: deleteError.message }, { status: 400 });
+  if (error) return error;
+  if (!supabase) {
+    return NextResponse.json(
+      { error: "Supabase is not configured. Add URL and keys to .env.local." },
+      { status: 503 }
+    );
   }
-  return NextResponse.json({ ok: true });
+  try {
+    const { error: deleteError } = await supabase
+      .from("vacancies")
+      .delete()
+      .eq("id", params.id);
+    if (deleteError) {
+      return NextResponse.json({ error: deleteError.message }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Delete failed.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

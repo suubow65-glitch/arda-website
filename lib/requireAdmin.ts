@@ -14,15 +14,6 @@ export async function requireAdmin() {
     };
   }
   const supabase = createServiceSupabase();
-  if (!supabase) {
-    return {
-      error: NextResponse.json(
-        { error: "Supabase is not configured. Add URL and keys to .env.local." },
-        { status: 503 }
-      ),
-      supabase: null,
-    };
-  }
   return { error: null, supabase };
 }
 
