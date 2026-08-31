@@ -1,5 +1,15 @@
-import type { Activity, DocumentItem, HeroSlide } from "@/data/mockData";
-import type { ActivityRow, DocumentRow, SlideRow } from "@/lib/types";
+import type { Activity, DocumentItem, HeroSlide, RegionHub } from "@/data/mockData";
+import { coreValues, org } from "@/data/mockData";
+import type {
+  AboutContentRow,
+  ActivityRow,
+  CoreValue,
+  DocumentRow,
+  ImpactStatRow,
+  PartnerRow,
+  SiteSettingsRow,
+  SlideRow,
+} from "@/lib/types";
 
 export function mapSlide(row: SlideRow): HeroSlide {
   return {
@@ -43,6 +53,67 @@ export function mapDocument(row: DocumentRow): DocumentItem {
     href: row.file_url,
     description: "",
   };
+}
+
+export function mapSiteSettings(row: SiteSettingsRow) {
+  return {
+    name: row.org_name || org.name,
+    shortName: row.short_name || org.shortName,
+    domain: "arda.org.so",
+    website: row.website || org.website,
+    email: row.email || org.email,
+    phone: row.phone || org.phone,
+    location: row.location || org.location,
+    address: row.address || org.address,
+    established: row.established || org.established,
+    registrations: row.registrations || org.registrations,
+    executiveDirector: row.executive_director || org.executiveDirector,
+    tagline: row.tagline || org.tagline,
+    phoneIct: row.phone_ict || "",
+    emailIct: row.email_ict || "",
+    subOfficeAddresses: row.sub_office_addresses || "",
+    social: {
+      facebook: row.social_facebook || "",
+      x: row.social_x || "",
+      linkedin: row.social_linkedin || "",
+      instagram: row.social_instagram || "",
+    },
+  };
+}
+
+export function mapAboutContent(row: AboutContentRow) {
+  return {
+    vision: row.vision || org.vision,
+    mission: row.mission || org.mission,
+    coreValues:
+      Array.isArray(row.core_values) && row.core_values.length
+        ? (row.core_values as CoreValue[])
+        : coreValues,
+  };
+}
+
+export function mapImpactStat(row: ImpactStatRow) {
+  return {
+    id: row.id,
+    value: row.value,
+    suffix: row.suffix,
+    label: row.label,
+    orderIndex: row.order_index,
+  };
+}
+
+export function mapPartner(row: PartnerRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    initials: row.initials,
+    logoUrl: row.logo_url,
+    websiteUrl: row.website_url,
+  };
+}
+
+export function mapRegion(row: { name: string; hubs: string; focus: string }): RegionHub {
+  return row;
 }
 
 export function slugify(value: string) {

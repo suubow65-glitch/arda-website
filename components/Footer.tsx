@@ -8,9 +8,20 @@ import {
   Phone,
   Twitter,
 } from "lucide-react";
-import { navLinks, org } from "@/data/mockData";
+import { navLinks } from "@/data/mockData";
+import { getSiteSettings, getPartners } from "@/lib/content";
 
-export default function Footer() {
+export default async function Footer() {
+  const settings = await getSiteSettings();
+  const partners = await getPartners();
+
+  const socials = [
+    { icon: Facebook, label: "Facebook", url: settings.social.facebook },
+    { icon: Twitter, label: "X", url: settings.social.x },
+    { icon: Linkedin, label: "LinkedIn", url: settings.social.linkedin },
+    { icon: Instagram, label: "Instagram", url: settings.social.instagram },
+  ];
+
   return (
     <footer className="bg-navy text-white">
       <div className="container-arda grid gap-10 py-14 md:grid-cols-2 lg:grid-cols-4">
@@ -24,7 +35,7 @@ export default function Footer() {
             />
           </div>
           <p className="mt-4 text-sm leading-relaxed text-white/75">
-            {org.tagline}
+            {settings.tagline}
           </p>
         </div>
 
@@ -61,18 +72,18 @@ export default function Footer() {
           <ul className="mt-4 space-y-3 text-sm text-white/80">
             <li className="flex gap-2">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-action" />
-              {org.address}
+              {settings.address}
             </li>
             <li className="flex gap-2">
               <Mail className="mt-0.5 h-4 w-4 shrink-0 text-action" />
-              <a href={`mailto:${org.email}`} className="hover:text-white">
-                {org.email}
+              <a href={`mailto:${settings.email}`} className="hover:text-white">
+                {settings.email}
               </a>
             </li>
             <li className="flex gap-2">
               <Phone className="mt-0.5 h-4 w-4 shrink-0 text-action" />
-              <a href={`tel:${org.phone.replace(/\s/g, "")}`} className="hover:text-white">
-                {org.phone}
+              <a href={`tel:${settings.phone.replace(/\s/g, "")}`} className="hover:text-white">
+                {settings.phone}
               </a>
             </li>
           </ul>
@@ -87,16 +98,13 @@ export default function Footer() {
             Mogadishu.
           </p>
           <div className="mt-4 flex gap-3">
-            {[
-              { icon: Facebook, label: "Facebook" },
-              { icon: Twitter, label: "X" },
-              { icon: Linkedin, label: "LinkedIn" },
-              { icon: Instagram, label: "Instagram" },
-            ].map(({ icon: Icon, label }) => (
+            {socials.map(({ icon: Icon, label, url }) => (
               <a
                 key={label}
-                href="https://arda.org.so"
+                href={url || "#"}
                 aria-label={label}
+                target={url ? "_blank" : undefined}
+                rel={url ? "noopener noreferrer" : undefined}
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-action"
               >
                 <Icon className="h-4 w-4" />
@@ -105,12 +113,51 @@ export default function Footer() {
           </div>
         </div>
       </div>
+
+      <div className="border-t border-white/10">
+        <div className="container-arda py-10">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-relief">
+            Partners
+          </h2>
+          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            {partners.map((partner) =>
+              partner.logoUrl ? (
+                <a
+                  key={partner.id}
+                  href={partner.websiteUrl || "#"}
+                  target={partner.websiteUrl ? "_blank" : undefined}
+                  rel={partner.websiteUrl ? "noopener noreferrer" : undefined}
+                  className="flex h-24 items-center justify-center rounded-2xl border border-white/10 bg-white p-3 transition hover:opacity-90"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={partner.logoUrl}
+                    alt={partner.name}
+                    className="h-14 w-auto object-contain"
+                  />
+                </a>
+              ) : (
+                <div
+                  key={partner.id}
+                  className="flex h-24 flex-col items-center justify-center rounded-2xl border border-dashed border-white/20 p-3 text-center"
+                >
+                  <span className="text-xs font-bold tracking-wide">
+                    {partner.initials}
+                  </span>
+                  <span className="mt-1 text-[11px] text-white/70">{partner.name}</span>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="border-t border-white/10">
         <div className="container-arda flex flex-col items-center justify-between gap-2 py-5 text-xs text-white/60 sm:flex-row">
           <p>
-            © {new Date().getFullYear()} {org.name}. All rights reserved. · {org.registrations}
+            © {new Date().getFullYear()} {settings.name}. All rights reserved. · {settings.registrations}
           </p>
-          <p>{org.website} · {org.location}</p>
+          <p>{settings.website} · {settings.location}</p>
         </div>
       </div>
     </footer>

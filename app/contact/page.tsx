@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 import { Mail, MapPin, Phone, User } from "lucide-react";
 import PageHero from "@/components/PageHero";
 import ContactForm from "@/components/ContactForm";
-import { org } from "@/data/mockData";
+import { getSiteSettings } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "Contact Us",
 };
 
-export default function ContactPage() {
+export default async function ContactPage() {
+  const settings = await getSiteSettings();
+
   return (
     <>
       <PageHero
@@ -23,30 +25,30 @@ export default function ContactPage() {
             <ul className="mt-6 space-y-4 text-sm text-navy/80">
               <li className="flex gap-3">
                 <MapPin className="h-5 w-5 shrink-0 text-action" />
-                {org.address}
+                {settings.address}
               </li>
               <li className="flex gap-3">
                 <Mail className="h-5 w-5 shrink-0 text-action" />
-                <a href={`mailto:${org.email}`} className="hover:text-navy">
-                  {org.email}
+                <a href={`mailto:${settings.email}`} className="hover:text-navy">
+                  {settings.email}
                 </a>
               </li>
               <li className="flex gap-3">
                 <Phone className="h-5 w-5 shrink-0 text-action" />
                 <a
-                  href={`tel:${org.phone.replace(/\s/g, "")}`}
+                  href={`tel:${settings.phone.replace(/\s/g, "")}`}
                   className="hover:text-navy"
                 >
-                  {org.phone}
+                  {settings.phone}
                 </a>
               </li>
               <li className="flex gap-3">
                 <User className="h-5 w-5 shrink-0 text-action" />
-                Executive Director: {org.executiveDirector}
+                Executive Director: {settings.executiveDirector}
               </li>
             </ul>
             <p className="mt-6 text-sm text-navy/65">
-              Website: <a href={`https://${org.website}`} className="text-action hover:underline">{org.website}</a>
+              Website: <a href={`https://${settings.website}`} className="text-action hover:underline">{settings.website}</a>
             </p>
           </div>
           <div className="lg:col-span-3">
@@ -60,7 +62,7 @@ export default function ContactPage() {
           <div className="overflow-hidden rounded-2xl border border-navy/10">
             <iframe
               title="ARDA Baidoa Head Office map"
-              src="https://maps.google.com/maps?q=Baidoa%20Southwest%20State%20Somalia&t=&z=12&ie=UTF8&iwloc=&output=embed"
+              src="https://maps.google.com/maps?q=Baidoa%20Somalia&t=&z=12&ie=UTF8&iwloc=&output=embed"
               className="h-80 w-full"
               loading="lazy"
             />

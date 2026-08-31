@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import PageHero from "@/components/PageHero";
 import FocusAreasGrid from "@/components/FocusAreasGrid";
-import { boardMembers, coreValues, leadership, org } from "@/data/mockData";
+import { boardMembers, leadership } from "@/data/mockData";
+import { getAboutContent, getSiteSettings } from "@/lib/content";
 
 const valueIcons: Record<string, LucideIcon> = {
   "shield-check": ShieldCheck,
@@ -56,13 +57,16 @@ function PersonCard({
   );
 }
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const about = await getAboutContent();
+  const settings = await getSiteSettings();
+
   return (
     <>
       <PageHero
         kicker="Who we are"
         title="About ARDA"
-        description={org.tagline}
+        description={settings.tagline}
       />
 
       <section className="py-16">
@@ -73,18 +77,18 @@ export default function AboutPage() {
               A Somali humanitarian and development organisation
             </h2>
             <p className="mt-4 leading-relaxed text-navy/70">
-              {org.name} was established in {org.established} and is legally
+              {settings.name} was established in {settings.established} and is legally
               registered with the Federal Ministry of Interior (Ref{" "}
               <span className="font-semibold text-navy">#2123</span>) and the
               Southwest State Ministry of Planning, Investment and Economic
               Development (MoPIED Reg{" "}
               <span className="font-semibold text-navy">#6173</span>). Our
-              headquarters is located at {org.address}.
+              headquarters is located at {settings.address}.
             </p>
             <p className="mt-4 leading-relaxed text-navy/70">
               ARDA is led by Executive Director{" "}
               <span className="font-semibold text-navy">
-                {org.executiveDirector}
+                {settings.executiveDirector}
               </span>{" "}
               and works across Southwest State and the Banadir Regional
               Administration to deliver relief and development programming in
@@ -100,12 +104,12 @@ export default function AboutPage() {
           <article className="rounded-2xl bg-navy p-8 text-white">
             <p className="section-kicker text-relief">Vision</p>
             <h2 className="mt-2 font-display text-3xl">The Somalia we work toward</h2>
-            <p className="mt-4 leading-relaxed text-white/80">{org.vision}</p>
+            <p className="mt-4 leading-relaxed text-white/80">{about.vision}</p>
           </article>
           <article className="rounded-2xl border border-navy/10 bg-white p-8 shadow-card">
             <p className="section-kicker">Mission</p>
             <h2 className="mt-2 font-display text-3xl text-navy">Why we exist</h2>
-            <p className="mt-4 leading-relaxed text-navy/70">{org.mission}</p>
+            <p className="mt-4 leading-relaxed text-navy/70">{about.mission}</p>
           </article>
         </div>
       </section>
@@ -115,8 +119,8 @@ export default function AboutPage() {
           <p className="section-kicker">Values</p>
           <h2 className="mt-2 font-display text-3xl text-navy">Core Values</h2>
           <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {coreValues.map((value) => {
-              const Icon = valueIcons[value.icon];
+            {about.coreValues.map((value) => {
+              const Icon = valueIcons[value.icon] ?? ShieldCheck;
               return (
                 <article
                   key={value.title}
@@ -150,7 +154,7 @@ export default function AboutPage() {
           <h2 className="mt-2 font-display text-3xl text-navy">Executive Director</h2>
           <div className="mt-8 grid gap-6 md:grid-cols-2">
             <PersonCard
-              name={org.executiveDirector}
+              name={settings.executiveDirector}
               role="Executive Director"
               bio="Provides overall leadership, strategic direction and donor engagement for ARDA, overseeing programmes across Southwest State and Banadir."
             />

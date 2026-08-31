@@ -4,12 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Mail, MapPin, Menu, Phone, X } from "lucide-react";
-import { navLinks, org } from "@/data/mockData";
+import { navLinks } from "@/data/mockData";
+import { getSiteSettings } from "@/lib/content";
 
 export default function Navbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [settings, setSettings] =
+    useState<Awaited<ReturnType<typeof getSiteSettings>> | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -22,27 +25,31 @@ export default function Navbar() {
     setOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    getSiteSettings().then((s) => setSettings(s));
+  }, []);
+
   return (
     <header className="sticky top-0 z-50">
       <div className="bg-navy text-white">
         <div className="container-arda flex flex-wrap items-center justify-between gap-2 py-2 text-xs sm:text-sm">
           <a
-            href={`mailto:${org.email}`}
+            href={`mailto:${settings?.email ?? ""}`}
             className="inline-flex items-center gap-1.5 hover:text-relief"
           >
             <Mail className="h-3.5 w-3.5 text-relief" />
-            {org.email}
+            {settings?.email}
           </a>
           <p className="hidden items-center gap-1.5 md:inline-flex">
             <MapPin className="h-3.5 w-3.5 text-action" />
-            {org.location}
+            {settings?.location}
           </p>
           <a
-            href={`tel:${org.phone.replace(/\s/g, "")}`}
+            href={`tel:${(settings?.phone ?? "").replace(/\s/g, "")}`}
             className="inline-flex items-center gap-1.5 hover:text-action"
           >
             <Phone className="h-3.5 w-3.5 text-action" />
-            {org.phone}
+            {settings?.phone}
           </a>
           <Link
             href="/admin"
@@ -63,7 +70,7 @@ export default function Navbar() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo.png"
-              alt={`${org.shortName} logo`}
+              alt={`${settings?.shortName ?? "ARDA"} logo`}
               className="h-12 w-auto object-contain md:h-14"
               onError={(event) => {
                 event.currentTarget.src = "/logo.svg";

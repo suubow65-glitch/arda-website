@@ -1,5 +1,5 @@
 import HeroSlider from "@/components/HeroSlider";
-import ImpactBar from "@/components/ImpactBar";
+import ImpactCounter from "@/components/ImpactCounter";
 import FocusAreasGrid from "@/components/FocusAreasGrid";
 import RegionalCoverage from "@/components/RegionalCoverage";
 import LatestActivities from "@/components/LatestActivities";
@@ -10,7 +10,7 @@ export default function HomePage() {
   return (
     <>
       <HeroSlider />
-      <ImpactBar />
+      <ImpactCounter />
 
       <section className="py-16">
         <div className="container-arda">

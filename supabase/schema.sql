@@ -103,3 +103,113 @@ create policy "Public read pdf-documents"
   on storage.objects for select
   to anon, authenticated
   using (bucket_id = 'pdf-documents');
+
+-- Site-wide settings and content
+
+create table if not exists public.site_settings (
+  id uuid primary key default gen_random_uuid(),
+  org_name text not null default 'Action for Relief And Development Agency (ARDA)',
+  short_name text not null default 'ARDA',
+  tagline text not null default '',
+  phone text not null default '',
+  phone_ict text,
+  email text not null default '',
+  email_ict text,
+  address text not null default '',
+  sub_office_addresses text,
+  location text not null default '',
+  website text not null default '',
+  established text,
+  registrations text,
+  executive_director text not null default '',
+  social_facebook text,
+  social_x text,
+  social_linkedin text,
+  social_instagram text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create table if not exists public.about_content (
+  id uuid primary key default gen_random_uuid(),
+  vision text not null default '',
+  mission text not null default '',
+  core_values jsonb not null default '[]'::jsonb,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create table if not exists public.impact_stats (
+  id uuid primary key default gen_random_uuid(),
+  label text not null,
+  value int not null default 0,
+  suffix text not null default '',
+  order_index int not null default 0,
+  created_at timestamp with time zone not null default now()
+);
+
+create table if not exists public.partners (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  initials text not null,
+  logo_url text,
+  website_url text,
+  order_index int not null default 0,
+  created_at timestamp with time zone not null default now()
+);
+
+alter table public.site_settings enable row level security;
+alter table public.about_content enable row level security;
+alter table public.impact_stats enable row level security;
+alter table public.partners enable row level security;
+
+drop policy if exists "Public can read site_settings" on public.site_settings;
+create policy "Public can read site_settings"
+  on public.site_settings for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Public can read about_content" on public.about_content;
+create policy "Public can read about_content"
+  on public.about_content for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Public can read impact_stats" on public.impact_stats;
+create policy "Public can read impact_stats"
+  on public.impact_stats for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Public can read partners" on public.partners;
+create policy "Public can read partners"
+  on public.partners for select
+  to anon, authenticated
+  using (true);
+
+insert into public.site_settings (id, org_name, short_name, tagline, phone, email, address, location, website, established, registrations, executive_director)
+values (
+  '00000000-0000-0000-0000-000000000000',
+  'Action for Relief And Development Agency (ARDA)',
+  'ARDA',
+  'Designing and implementing life changing Relief and development programs that alleviate climatic change risks and deepening poverty in collaboration with relevant stakeholders to ensure holistic sustainable development in Somalia.',
+  '+252-0624599060',
+  'info@arda.org.so',
+  'Mogadishu Road, Adaada, Baidoa, Southwest State, Somalia',
+  'Baidoa, Southwest State, Somalia',
+  'www.arda.org.so',
+  '2017',
+  'Federal Ministry of Interior Ref #2123 · Southwest State MoPIED Reg #6173',
+  'Isse Abdullahi Hassan'
+)
+on conflict (id) do update set updated_at = now();
+
+insert into storage.buckets (id, name, public)
+values ('partner-logos', 'partner-logos', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "Public read partner-logos" on storage.objects;
+create policy "Public read partner-logos"
+  on storage.objects for select
+  to anon, authenticated
+  using (bucket_id = 'partner-logos');

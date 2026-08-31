@@ -3,13 +3,17 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  BookOpen,
   FileText,
   FolderOpen,
+  Globe,
   Images,
   Inbox,
   LayoutDashboard,
   LogOut,
   Menu,
+  Settings,
+  Target,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -19,6 +23,10 @@ const links = [
   { href: "/admin/slides", label: "Slideshows", icon: Images },
   { href: "/admin/activities", label: "Activities", icon: FolderOpen },
   { href: "/admin/documents", label: "Documents", icon: FileText },
+  { href: "/admin/about", label: "Vision & Mission", icon: BookOpen },
+  { href: "/admin/partners", label: "Partners", icon: Globe },
+  { href: "/admin/stats", label: "Impact Stats", icon: Target },
+  { href: "/admin/settings", label: "Site Settings", icon: Settings },
   { href: "/admin/messages", label: "Contact Messages", icon: Inbox },
 ];
 
