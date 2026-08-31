@@ -60,6 +60,16 @@ export default function StatsAdminPage() {
     setSaving(true);
     setError("");
     setSuccess("");
+
+    const next = editing.id
+      ? items.map((i) =>
+          i.id === editing.id ? ({ ...i, ...editing } as ImpactStatRow) : i
+        )
+      : [...items, { ...editing, id: String(Date.now()) } as ImpactStatRow];
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.impactStats, next.map(mapImpactStat));
+
     try {
       const url = editing.id
         ? `/api/admin/impact-stats/${editing.id}`
@@ -77,8 +87,6 @@ export default function StatsAdminPage() {
       await load();
     } catch {
       setSuccess("Saved Successfully!");
-      setLocalItem(adminKey, items);
-      setLocalItem(storageKeys.impactStats, items.map(mapImpactStat));
     } finally {
       setSaving(false);
     }

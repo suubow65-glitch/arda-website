@@ -2,12 +2,12 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Eye, EyeOff, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
-import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
-import { mapSlide } from "@/lib/mappers";
+import { getLocalItem, storageKeys } from "@/lib/storage";
 import { heroSlides } from "@/data/mockData";
 import type { SlideRow } from "@/lib/types";
 
 const adminKey = "arda_admin_slides_list";
+const overrideKey = "arda_slides_override";
 
 const categories = [
   "Food Security & Agriculture",
@@ -43,6 +43,14 @@ const empty = {
   active: true,
 };
 
+function persistSlides(rows: SlideRow[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(adminKey, JSON.stringify(rows));
+  localStorage.setItem(overrideKey, JSON.stringify(rows));
+  localStorage.setItem(storageKeys.slides, JSON.stringify(rows));
+  window.dispatchEvent(new Event("arda-slides-updated"));
+}
+
 export default function SlidesAdminPage() {
   const [items, setItems] = useState<SlideRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +68,7 @@ export default function SlidesAdminPage() {
     const saved = getLocalItem<SlideRow[]>(adminKey);
     if (saved) {
       setItems(saved);
+      persistSlides(saved);
       setLoading(false);
       return;
     }
@@ -69,12 +78,10 @@ export default function SlidesAdminPage() {
       const data = (await res.json()) as { slides: SlideRow[] };
       const list = data.slides.length ? data.slides : defaultSlides;
       setItems(list);
-      setLocalItem(adminKey, list);
-      setLocalItem(storageKeys.slides, list.map(mapSlide));
+      persistSlides(list);
     } catch {
       setItems(defaultSlides);
-      setLocalItem(adminKey, defaultSlides);
-      setLocalItem(storageKeys.slides, defaultSlides.map(mapSlide));
+      persistSlides(defaultSlides);
     } finally {
       setLoading(false);
     }
@@ -163,8 +170,7 @@ export default function SlidesAdminPage() {
       : [...items, nextItem];
 
     setItems(next);
-    setLocalItem(adminKey, next);
-    setLocalItem(storageKeys.slides, next.map(mapSlide));
+    persistSlides(next);
 
     try {
       const url = editing
@@ -180,8 +186,7 @@ export default function SlidesAdminPage() {
           i.id === nextItem.id ? { ...created, image_url: imageUrl } : i
         );
         setItems(withServer);
-        setLocalItem(adminKey, withServer);
-        setLocalItem(storageKeys.slides, withServer.map(mapSlide));
+        persistSlides(withServer);
       }
       reset();
     } catch {
@@ -199,8 +204,7 @@ export default function SlidesAdminPage() {
       i.id === id ? { ...i, active: !i.active } : i
     );
     setItems(next);
-    setLocalItem(adminKey, next);
-    setLocalItem(storageKeys.slides, next.map(mapSlide));
+    persistSlides(next);
 
     const item = next.find((i) => i.id === id);
     if (!item) return;
@@ -223,8 +227,7 @@ export default function SlidesAdminPage() {
     setSuccess("");
     const next = items.filter((i) => i.id !== id);
     setItems(next);
-    setLocalItem(adminKey, next);
-    setLocalItem(storageKeys.slides, next.map(mapSlide));
+    persistSlides(next);
     try {
       const res = await fetch(`/api/admin/slides/${id}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };

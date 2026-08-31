@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { heroSlides } from "@/data/mockData";
 import { createSupabaseClient, isSupabaseConfigured } from "@/lib/supabaseClient";
 import { mapSlide } from "@/lib/mappers";
+import { storageKeys } from "@/lib/storage";
 import type { HeroSlide } from "@/data/mockData";
 import type { SlideRow } from "@/lib/types";
 
@@ -16,30 +17,82 @@ export default function HeroSlider() {
   const [slides, setSlides] = useState<HeroSlide[]>(heroSlides);
   const [index, setIndex] = useState(0);
   const slidesRef = useRef<HeroSlide[]>(slides);
+  const hasLocal = useRef(false);
 
   useEffect(() => {
     slidesRef.current = slides;
   }, [slides]);
 
-  useEffect(() => {
-    if (!isSupabaseConfigured()) return;
-    const supabase = createSupabaseClient();
-    if (!supabase) return;
-
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("slides")
-          .select("*")
-          .eq("active", true)
-          .order("order_index", { ascending: true });
-        if (error || !data || data.length === 0) return;
-        setSlides((data as SlideRow[]).map(mapSlide));
-      } catch {
-        // Keep fallback mock slides
+  const loadFromStorage = useCallback(() => {
+    const raw =
+      (typeof window !== "undefined" &&
+        (localStorage.getItem("arda_slides_override") ||
+          localStorage.getItem("arda_admin_slides_list") ||
+          localStorage.getItem(storageKeys.slides))) ||
+      null;
+    if (!raw) return false;
+    try {
+      const parsed = JSON.parse(raw) as unknown[];
+      if (!Array.isArray(parsed) || parsed.length === 0) return false;
+      const active = parsed
+        .filter((s: any) => s.active !== false)
+        .map((s: any) => {
+          if (s.image_url) return mapSlide(s as SlideRow);
+          return s as HeroSlide;
+        });
+      if (active.length > 0) {
+        setSlides(active);
+        hasLocal.current = true;
+        return true;
       }
-    })();
+    } catch {
+      // Keep fallback
+    }
+    return false;
   }, []);
+
+  useEffect(() => {
+    loadFromStorage();
+
+    const onStorage = (e: StorageEvent) => {
+      if (
+        e.key === "arda_slides_override" ||
+        e.key === "arda_admin_slides_list" ||
+        e.key === storageKeys.slides
+      ) {
+        loadFromStorage();
+      }
+    };
+
+    const onUpdate = () => loadFromStorage();
+
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("arda-slides-updated", onUpdate);
+
+    if (!hasLocal.current && isSupabaseConfigured()) {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        (async () => {
+          try {
+            const { data, error } = await supabase
+              .from("slides")
+              .select("*")
+              .eq("active", true)
+              .order("order_index", { ascending: true });
+            if (error || !data || data.length === 0 || hasLocal.current) return;
+            setSlides((data as SlideRow[]).map(mapSlide));
+          } catch {
+            // Keep fallback
+          }
+        })();
+      }
+    }
+
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("arda-slides-updated", onUpdate);
+    };
+  }, [loadFromStorage]);
 
   const go = useCallback((direction: number) => {
     setIndex((current) => {
