@@ -13,8 +13,12 @@ export default function PartnersSection() {
 
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-      {partners.map((partner) =>
-        partner.logoUrl ? (
+      {partners.map((partner) => {
+        const logo =
+          partner.logoUrl ||
+          (partner as { logo_url?: string }).logo_url ||
+          "";
+        return logo ? (
           <a
             key={partner.id}
             href={partner.websiteUrl || "#"}
@@ -24,9 +28,9 @@ export default function PartnersSection() {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={partner.logoUrl}
+              src={logo}
               alt={partner.name}
-              className="h-14 w-auto object-contain"
+              className="mb-2 h-12 max-w-[150px] object-contain"
             />
           </a>
         ) : (
@@ -39,8 +43,8 @@ export default function PartnersSection() {
             </span>
             <span className="mt-1 text-[11px] text-navy/55">{partner.name}</span>
           </div>
-        )
-      )}
+        );
+      })}
     </div>
   );
 }

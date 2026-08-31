@@ -81,8 +81,9 @@ export default function HomePage() {
           <p className="section-kicker">Collaboration</p>
           <h2 className="mt-2 font-display text-3xl sm:text-4xl">Partners</h2>
           <p className="mt-3 max-w-2xl text-navy/70">
-            ARDA works with UN agencies, clusters and peer NGOs. Logo
-            placeholders below will be replaced with official partner artwork.
+            ARDA collaborates with international donors, UN agencies, government
+            ministries, and peer humanitarian organisations to deliver
+            sustainable relief and development programs across Somalia.
           </p>
           <div className="mt-10">
             <PartnersSection />
