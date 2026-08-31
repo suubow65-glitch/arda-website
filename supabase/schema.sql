@@ -213,3 +213,86 @@ create policy "Public read partner-logos"
   on storage.objects for select
   to anon, authenticated
   using (bucket_id = 'partner-logos');
+
+-- Team, vacancies, and admin credentials
+
+create table if not exists public.team_members (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  role text not null,
+  category text not null default 'executive' check (category in ('board', 'executive', 'volunteer')),
+  image_url text,
+  bio text,
+  order_index int not null default 0,
+  created_at timestamp with time zone not null default now()
+);
+
+create table if not exists public.vacancies (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  type text not null default 'job' check (type in ('job', 'tender')),
+  location text,
+  deadline text,
+  file_url text,
+  description text,
+  status text not null default 'active' check (status in ('active', 'closed')),
+  order_index int not null default 0,
+  created_at timestamp with time zone not null default now()
+);
+
+create table if not exists public.admin_credentials (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  passcode text not null,
+  updated_at timestamp with time zone not null default now()
+);
+
+alter table public.team_members enable row level security;
+alter table public.vacancies enable row level security;
+alter table public.admin_credentials enable row level security;
+
+drop policy if exists "Public can read team_members" on public.team_members;
+create policy "Public can read team_members"
+  on public.team_members for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Public can read vacancies" on public.vacancies;
+create policy "Public can read vacancies"
+  on public.vacancies for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Public can read admin_credentials" on public.admin_credentials;
+create policy "Public can read admin_credentials"
+  on public.admin_credentials for select
+  to anon, authenticated
+  using (true);
+
+insert into public.admin_credentials (id, email, passcode)
+values (
+  '00000000-0000-0000-0000-000000000001',
+  'ict@arda.org.so',
+  'ArdaAdmin2026!'
+)
+on conflict (id) do update set updated_at = now();
+
+insert into storage.buckets (id, name, public)
+values ('team-photos', 'team-photos', true)
+on conflict (id) do update set public = true;
+
+insert into storage.buckets (id, name, public)
+values ('vacancy-files', 'vacancy-files', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "Public read team-photos" on storage.objects;
+create policy "Public read team-photos"
+  on storage.objects for select
+  to anon, authenticated
+  using (bucket_id = 'team-photos');
+
+drop policy if exists "Public read vacancy-files" on storage.objects;
+create policy "Public read vacancy-files"
+  on storage.objects for select
+  to anon, authenticated
+  using (bucket_id = 'vacancy-files');

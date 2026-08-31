@@ -1,9 +1,11 @@
 import {
   activities as mockActivities,
+  boardMembers,
   coreValues,
   documents as mockDocuments,
   heroSlides as mockSlides,
   impactStats,
+  leadership,
   org,
   partners as mockPartners,
 } from "@/data/mockData";
@@ -16,6 +18,8 @@ import {
   mapPartner,
   mapSiteSettings,
   mapSlide,
+  mapTeamMember,
+  mapVacancy,
 } from "@/lib/mappers";
 import type {
   AboutContentRow,
@@ -25,6 +29,8 @@ import type {
   PartnerRow,
   SiteSettingsRow,
   SlideRow,
+  TeamMemberRow,
+  VacancyRow,
 } from "@/lib/types";
 
 export async function getPublishedSlides() {
@@ -184,5 +190,72 @@ export async function submitContactMessage(input: {
     return { ok: true, stored: true };
   } catch {
     return { ok: false, stored: false };
+  }
+}
+
+export async function getTeamMembers() {
+  const fallback = [
+    ...boardMembers.map((m) => ({
+      id: m.name,
+      name: m.name,
+      role: m.role,
+      category: "board" as const,
+      image: "",
+      bio: m.bio || "",
+      orderIndex: 0,
+    })),
+    ...leadership.map((m) => ({
+      id: m.name,
+      name: m.name,
+      role: m.role,
+      category: "executive" as const,
+      image: "",
+      bio: m.bio || "",
+      orderIndex: 0,
+    })),
+  ];
+  if (!isSupabaseConfigured()) return fallback;
+  try {
+    const supabase = createSupabaseClient();
+    if (!supabase) return fallback;
+    const { data, error } = await supabase
+      .from("team_members")
+      .select("*")
+      .order("order_index", { ascending: true });
+    if (error || !data?.length) return fallback;
+    return (data as TeamMemberRow[]).map(mapTeamMember);
+  } catch {
+    return fallback;
+  }
+}
+
+export async function getVacancies() {
+  const fallback = [
+    {
+      id: "1",
+      title: "Call for Expressions of Interest — ARDA Framework Partnership 2026",
+      type: "tender" as const,
+      location: "Baidoa, Somalia",
+      deadline: "Open",
+      fileUrl: "",
+      description:
+        "ARDA invites prospective local and international partners to express interest in future collaboration for 2026/2027 programme cycles.",
+      status: "active" as const,
+      orderIndex: 0,
+    },
+  ];
+  if (!isSupabaseConfigured()) return fallback;
+  try {
+    const supabase = createSupabaseClient();
+    if (!supabase) return fallback;
+    const { data, error } = await supabase
+      .from("vacancies")
+      .select("*")
+      .eq("status", "active")
+      .order("order_index", { ascending: true });
+    if (error || !data?.length) return fallback;
+    return (data as VacancyRow[]).map(mapVacancy);
+  } catch {
+    return fallback;
   }
 }

@@ -12,8 +12,7 @@ import {
 } from "lucide-react";
 import PageHero from "@/components/PageHero";
 import FocusAreasGrid from "@/components/FocusAreasGrid";
-import { boardMembers, leadership } from "@/data/mockData";
-import { getAboutContent, getSiteSettings } from "@/lib/content";
+import { getAboutContent, getSiteSettings, getTeamMembers } from "@/lib/content";
 
 const valueIcons: Record<string, LucideIcon> = {
   "shield-check": ShieldCheck,
@@ -34,10 +33,12 @@ function PersonCard({
   name,
   role,
   bio,
+  image,
 }: {
   name: string;
   role: string;
   bio: string;
+  image?: string;
 }) {
   const initials = name
     .split(" ")
@@ -47,8 +48,16 @@ function PersonCard({
 
   return (
     <article className="rounded-2xl bg-navy p-6 text-white">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-action font-display text-xl">
-        {initials || "AR"}
+      <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-action font-display text-xl">
+        {image ? (
+          <img
+            src={image}
+            alt={name}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          initials || "AR"
+        )}
       </div>
       <h3 className="mt-4 font-display text-2xl">{name}</h3>
       <p className="text-sm font-semibold text-relief">{role}</p>
@@ -60,6 +69,11 @@ function PersonCard({
 export default async function AboutPage() {
   const about = await getAboutContent();
   const settings = await getSiteSettings();
+  const team = await getTeamMembers();
+
+  const board = team.filter((m) => m.category === "board");
+  const leadership = team.filter((m) => m.category === "executive");
+  const volunteers = team.filter((m) => m.category === "volunteer");
 
   return (
     <>
@@ -187,8 +201,14 @@ export default async function AboutPage() {
             strategic direction, oversight and accountability.
           </p>
           <div className="mt-10 grid gap-6 md:grid-cols-3">
-            {boardMembers.map((person) => (
-              <PersonCard key={person.name} {...person} />
+            {board.map((person) => (
+              <PersonCard
+                key={person.id}
+                name={person.name}
+                role={person.role}
+                bio={person.bio}
+                image={person.image}
+              />
             ))}
           </div>
         </div>
@@ -199,19 +219,45 @@ export default async function AboutPage() {
           <p className="section-kicker">Management</p>
           <h2 className="mt-2 font-display text-3xl text-navy">Senior Management</h2>
           <p className="mt-3 max-w-2xl text-navy/70">
-            Day-to-day implementation is led by four senior managers supported by
+            Day-to-day implementation is led by senior managers supported by
             more than 15 active volunteers in Baidoa, Burhakaba and surrounding
             districts.
           </p>
           <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {leadership.map((person) => (
-              <PersonCard key={person.name} {...person} />
+              <PersonCard
+                key={person.id}
+                name={person.name}
+                role={person.role}
+                bio={person.bio}
+                image={person.image}
+              />
             ))}
           </div>
         </div>
       </section>
 
-      <section className="bg-white py-16">
+      {volunteers.length > 0 && (
+        <section className="bg-white py-16">
+          <div className="container-arda">
+            <p className="section-kicker">Volunteers</p>
+            <h2 className="mt-2 font-display text-3xl text-navy">Our Volunteers</h2>
+            <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+              {volunteers.map((person) => (
+                <PersonCard
+                  key={person.id}
+                  name={person.name}
+                  role={person.role}
+                  bio={person.bio}
+                  image={person.image}
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="bg-navy py-16">
         <div className="container-arda rounded-2xl bg-navy p-8 text-white lg:p-10">
           <h2 className="font-display text-3xl">Volunteer Network</h2>
           <p className="mt-4 max-w-3xl leading-relaxed text-white/80">

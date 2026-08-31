@@ -526,5 +526,6 @@ export const navLinks = [
   { href: "/focus-areas", label: "Focus Areas" },
   { href: "/activities", label: "Activities" },
   { href: "/documents", label: "Documents/Reports" },
+  { href: "/careers", label: "Careers" },
   { href: "/contact", label: "Contact Us" },
 ];

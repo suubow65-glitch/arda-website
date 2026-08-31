@@ -9,6 +9,8 @@ import type {
   PartnerRow,
   SiteSettingsRow,
   SlideRow,
+  TeamMemberRow,
+  VacancyRow,
 } from "@/lib/types";
 
 export function mapSlide(row: SlideRow): HeroSlide {
@@ -109,6 +111,32 @@ export function mapPartner(row: PartnerRow) {
     initials: row.initials,
     logoUrl: row.logo_url,
     websiteUrl: row.website_url,
+  };
+}
+
+export function mapTeamMember(row: TeamMemberRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    role: row.role,
+    category: row.category,
+    image: row.image_url || "",
+    bio: row.bio || "",
+    orderIndex: row.order_index,
+  };
+}
+
+export function mapVacancy(row: VacancyRow) {
+  return {
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    location: row.location || "",
+    deadline: row.deadline || "",
+    fileUrl: row.file_url || "",
+    description: row.description || "",
+    status: row.status,
+    orderIndex: row.order_index,
   };
 }
 

@@ -7,16 +7,7 @@ import {
 } from "@/lib/adminAuth";
 
 export async function POST(request: Request) {
-  const credentials = getAdminCredentials();
-  if (!credentials) {
-    return NextResponse.json(
-      {
-        error:
-          "Admin login is not configured. Set ADMIN_EMAIL and ADMIN_PASSCODE in .env.local.",
-      },
-      { status: 503 }
-    );
-  }
+  const credentials = await getAdminCredentials();
 
   const body = (await request.json()) as { email?: string; passcode?: string };
   const email = (body.email || "").trim().toLowerCase();

@@ -1,4 +1,6 @@
 import { ADMIN_COOKIE } from "@/lib/constants";
+import { createSupabaseClient, isSupabaseConfigured } from "@/lib/supabaseClient";
+import type { AdminCredentialRow } from "@/lib/types";
 
 const SESSION_DAYS = 7;
 
@@ -78,8 +80,25 @@ export function sessionCookieOptions() {
   };
 }
 
-export function getAdminCredentials() {
-  const email = process.env.ADMIN_EMAIL || "ict@arda.org.so";
-  const passcode = process.env.ADMIN_PASSCODE || "ArdaAdmin2026!";
-  return { email, passcode };
+export async function getAdminCredentials() {
+  const fallback = {
+    email: process.env.ADMIN_EMAIL || "ict@arda.org.so",
+    passcode: process.env.ADMIN_PASSCODE || "ArdaAdmin2026!",
+  };
+  if (!isSupabaseConfigured()) return fallback;
+  try {
+    const supabase = createSupabaseClient();
+    if (!supabase) return fallback;
+    const { data, error } = await supabase
+      .from("admin_credentials")
+      .select("*")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return fallback;
+    const row = data as AdminCredentialRow;
+    return { email: row.email, passcode: row.passcode };
+  } catch {
+    return fallback;
+  }
 }

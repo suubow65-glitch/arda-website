@@ -102,3 +102,34 @@ export type PartnerRow = {
   order_index: number;
   created_at: string;
 };
+
+export type TeamMemberRow = {
+  id: string;
+  name: string;
+  role: string;
+  category: "board" | "executive" | "volunteer";
+  image_url: string | null;
+  bio: string | null;
+  order_index: number;
+  created_at: string;
+};
+
+export type VacancyRow = {
+  id: string;
+  title: string;
+  type: "job" | "tender";
+  location: string | null;
+  deadline: string | null;
+  file_url: string | null;
+  description: string | null;
+  status: "active" | "closed";
+  order_index: number;
+  created_at: string;
+};
+
+export type AdminCredentialRow = {
+  id: string;
+  email: string;
+  passcode: string;
+  updated_at: string;
+};
