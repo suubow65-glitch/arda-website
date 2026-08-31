@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy: #0b2d47;
+  --relief: #5ca83f;
+  --action: #ed8d2e;
+  --surface: #f8fafc;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-surface text-navy antialiased;
+}
+
+@layer components {
+  .container-arda {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .btn-action {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-action px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-action-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action;
+  }
+
+  .btn-navy {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-navy px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-navy-800;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-white/80 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white hover:text-navy;
+  }
+
+  .section-kicker {
+    @apply text-xs font-semibold uppercase tracking-[0.2em] text-relief;
+  }
+}
