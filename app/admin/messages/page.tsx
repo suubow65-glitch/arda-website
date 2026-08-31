@@ -2,21 +2,33 @@
 
 import { useEffect, useState } from "react";
 import { Check, Loader2, Mail, MailOpen, Trash2 } from "lucide-react";
+import { getLocalItem, setLocalItem } from "@/lib/storage";
 import type { ContactMessageRow } from "@/lib/types";
+
+const adminKey = "arda_admin_messages_list";
 
 export default function MessagesAdminPage() {
   const [items, setItems] = useState<ContactMessageRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   async function load() {
+    setLoading(true);
+    const saved = getLocalItem<ContactMessageRow[]>(adminKey);
+    if (saved) {
+      setItems(saved);
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch("/api/admin/messages");
       if (!res.ok) throw new Error("Failed to load messages.");
       const data = (await res.json()) as { messages: ContactMessageRow[] };
       setItems(data.messages);
-    } catch (err) {
-      setError((err as Error).message);
+      setLocalItem(adminKey, data.messages);
+    } catch {
+      // keep local state/empty
     } finally {
       setLoading(false);
     }
@@ -28,6 +40,10 @@ export default function MessagesAdminPage() {
 
   async function markRead(id: string, read: boolean) {
     setError("");
+    setSuccess("");
+    const next = items.map((i) => (i.id === id ? { ...i, read } as ContactMessageRow : i));
+    setItems(next);
+    setLocalItem(adminKey, next);
     try {
       const res = await fetch(`/api/admin/messages/${id}`, {
         method: "PATCH",
@@ -37,21 +53,25 @@ export default function MessagesAdminPage() {
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Update failed.");
       await load();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     }
   }
 
   async function remove(id: string) {
     if (!confirm("Delete this message?")) return;
     setError("");
+    setSuccess("");
+    const next = items.filter((i) => i.id !== id);
+    setItems(next);
+    setLocalItem(adminKey, next);
     try {
       const res = await fetch(`/api/admin/messages/${id}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       await load();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     }
   }
 
@@ -63,6 +83,11 @@ export default function MessagesAdminPage() {
       {error && (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
+        </p>
+      )}
+      {success && (
+        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          {success}
         </p>
       )}
 

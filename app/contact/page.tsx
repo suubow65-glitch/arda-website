@@ -1,15 +1,18 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useEffect, useState } from "react";
 import { Mail, MapPin, Phone, User } from "lucide-react";
 import PageHero from "@/components/PageHero";
 import ContactForm from "@/components/ContactForm";
 import { getSiteSettings } from "@/lib/content";
+import { mapSiteSettings } from "@/lib/mappers";
 
-export const metadata: Metadata = {
-  title: "Contact Us",
-};
+export default function ContactPage() {
+  const [settings, setSettings] = useState(mapSiteSettings({} as Parameters<typeof mapSiteSettings>[0]));
 
-export default async function ContactPage() {
-  const settings = await getSiteSettings();
+  useEffect(() => {
+    getSiteSettings().then(setSettings);
+  }, []);
 
   return (
     <>

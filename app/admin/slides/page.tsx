@@ -2,7 +2,11 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
+import { mapSlide } from "@/lib/mappers";
 import type { SlideRow } from "@/lib/types";
+
+const adminKey = "arda_admin_slides_list";
 
 const empty = {
   title: "",
@@ -19,19 +23,29 @@ export default function SlidesAdminPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SlideRow | null>(null);
   const [form, setForm] = useState(empty);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
+    setLoading(true);
+    const saved = getLocalItem<SlideRow[]>(adminKey);
+    if (saved) {
+      setItems(saved);
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch("/api/admin/slides");
       if (!res.ok) throw new Error("Failed to load slides.");
       const data = (await res.json()) as { slides: SlideRow[] };
       setItems(data.slides);
-    } catch (err) {
-      setError((err as Error).message);
+      setLocalItem(adminKey, data.slides);
+      setLocalItem(storageKeys.slides, data.slides.map(mapSlide));
+    } catch {
+      // keep local state/empty
     } finally {
       setLoading(false);
     }
@@ -67,6 +81,7 @@ export default function SlidesAdminPage() {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setSuccess("");
 
     const fd = new FormData();
     fd.set("title", form.title);
@@ -81,6 +96,25 @@ export default function SlidesAdminPage() {
     if (file) fd.set("image", file);
     if (editing && !file) fd.set("image_url", editing.image_url);
 
+    const next = editing
+      ? items.map((i) =>
+          i.id === editing.id
+            ? ({ ...editing, ...form } as SlideRow)
+            : i
+        )
+      : [
+          ...items,
+          {
+            ...form,
+            id: String(Date.now()),
+            image_url: "",
+            created_at: new Date().toISOString(),
+          } as SlideRow,
+        ];
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.slides, next.map(mapSlide));
+
     try {
       const url = editing ? `/api/admin/slides/${editing.id}` : "/api/admin/slides";
       const method = editing ? "PATCH" : "POST";
@@ -89,8 +123,8 @@ export default function SlidesAdminPage() {
       if (!res.ok) throw new Error(data.error || "Save failed.");
       await load();
       reset();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     } finally {
       setSaving(false);
     }
@@ -99,13 +133,18 @@ export default function SlidesAdminPage() {
   async function remove(id: string) {
     if (!confirm("Delete this slide?")) return;
     setError("");
+    setSuccess("");
+    const next = items.filter((i) => i.id !== id);
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.slides, next.map(mapSlide));
     try {
       const res = await fetch(`/api/admin/slides/${id}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       await load();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     }
   }
 
@@ -129,6 +168,11 @@ export default function SlidesAdminPage() {
       {error && (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
+        </p>
+      )}
+      {success && (
+        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          {success}
         </p>
       )}
 

@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Facebook,
@@ -9,11 +12,17 @@ import {
   Twitter,
 } from "lucide-react";
 import { navLinks } from "@/data/mockData";
-import { getSiteSettings, getPartners } from "@/lib/content";
+import { getPartners, getSiteSettings } from "@/lib/content";
+import { mapPartner, mapSiteSettings } from "@/lib/mappers";
 
-export default async function Footer() {
-  const settings = await getSiteSettings();
-  const partners = await getPartners();
+export default function Footer() {
+  const [settings, setSettings] = useState(mapSiteSettings({} as Parameters<typeof mapSiteSettings>[0]));
+  const [partners, setPartners] = useState<ReturnType<typeof mapPartner>[]>([]);
+
+  useEffect(() => {
+    getSiteSettings().then(setSettings);
+    getPartners().then(setPartners);
+  }, []);
 
   const socials = [
     { icon: Facebook, label: "Facebook", url: settings.social.facebook },
@@ -48,7 +57,7 @@ export default async function Footer() {
               <li key={link.href}>
                 <Link
                   href={link.href}
-                    className="text-sm text-white/80 transition hover:text-action"
+                  className="text-sm text-white/80 transition hover:text-action"
                 >
                   {link.label}
                 </Link>
@@ -125,17 +134,17 @@ export default async function Footer() {
                 <a
                   key={partner.id}
                   href={partner.websiteUrl || "#"}
-                  target={partner.websiteUrl ? "_blank" : undefined}
-                  rel={partner.websiteUrl ? "noopener noreferrer" : undefined}
-                  className="flex h-24 items-center justify-center rounded-2xl border border-white/10 bg-white p-3 transition hover:opacity-90"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={partner.logoUrl}
-                    alt={partner.name}
-                    className="h-14 w-auto object-contain"
-                  />
-                </a>
+                    target={partner.websiteUrl ? "_blank" : undefined}
+                rel={partner.websiteUrl ? "noopener noreferrer" : undefined}
+                className="flex h-24 items-center justify-center rounded-2xl border border-white/10 bg-white p-3 transition hover:opacity-90"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={partner.logoUrl}
+                  alt={partner.name}
+                  className="h-14 w-auto object-contain"
+                />
+              </a>
               ) : (
                 <div
                   key={partner.id}

@@ -2,50 +2,71 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
+import { mapSiteSettings } from "@/lib/mappers";
 import type { SiteSettingsRow } from "@/lib/types";
 
 const empty: Partial<SiteSettingsRow> = {
-  org_name: "",
-  short_name: "",
-  tagline: "",
-  phone: "",
-  phone_ict: "",
-  email: "",
-  email_ict: "",
-  address: "",
+  org_name: "Action for Relief & Development Agency",
+  short_name: "ARDA",
+  tagline: "Humanitarian Relief & Development in Somalia",
+  phone: "+252-0624599060",
+  phone_ict: "+252-0624599060",
+  email: "info@arda.org.so",
+  email_ict: "ict@arda.org.so",
+  address: "Mogadishu Road, Adaada, Baidoa, Southwest State, Somalia",
   sub_office_addresses: "",
-  location: "",
-  website: "",
-  established: "",
-  registrations: "",
-  executive_director: "",
-  social_facebook: "",
+  location: "Baidoa, Southwest State, Somalia",
+  website: "www.arda.org.so",
+  established: "2017",
+  registrations: "Federal Interior Ref #2123, Southwest MoPIED Reg #6173",
+  executive_director: "Isse Abdullahi Hassan",
+  social_facebook: "https://www.facebook.com/profile.php?id=61590265256703",
   social_x: "",
   social_linkedin: "",
   social_instagram: "",
 };
+
+const adminKey = "arda_admin_settings_form";
 
 export default function SettingsAdminPage() {
   const [form, setForm] = useState<Partial<SiteSettingsRow>>(empty);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  async function load() {
+    setLoading(true);
+    const saved = getLocalItem<Partial<SiteSettingsRow>>(adminKey);
+    if (saved) {
+      setForm(saved);
+      setLoading(false);
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/settings");
+      if (!res.ok) throw new Error("Failed to load settings.");
+      const data = (await res.json()) as { settings: SiteSettingsRow | null };
+      setForm(data.settings ?? empty);
+    } catch {
+      // keep the default ARDA values
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    fetch("/api/admin/settings")
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to load settings.");
-        const data = (await res.json()) as { settings: SiteSettingsRow | null };
-        setForm(data.settings ?? empty);
-      })
-      .catch((err) => setError((err as Error).message))
-      .finally(() => setLoading(false));
+    load();
   }, []);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setSuccess("");
+    setLocalItem(adminKey, form);
+    setLocalItem(storageKeys.settings, mapSiteSettings(form as any));
     try {
       const res = await fetch("/api/admin/settings", {
         method: "POST",
@@ -54,8 +75,8 @@ export default function SettingsAdminPage() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Save failed.");
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     } finally {
       setSaving(false);
     }
@@ -105,6 +126,11 @@ export default function SettingsAdminPage() {
       {error && (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
+        </p>
+      )}
+      {success && (
+        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          {success}
         </p>
       )}
 

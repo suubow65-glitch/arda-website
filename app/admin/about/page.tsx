@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
+import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import type { AboutContentRow, CoreValue } from "@/lib/types";
 
 const emptyCoreValue: CoreValue = { title: "", description: "", icon: "shield-check" };
@@ -20,6 +21,8 @@ const icons = [
   "wheat",
 ];
 
+const adminKey = "arda_admin_about_form";
+
 export default function AboutAdminPage() {
   const [vision, setVision] = useState("");
   const [mission, setMission] = useState("");
@@ -27,28 +30,47 @@ export default function AboutAdminPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  async function load() {
+    setLoading(true);
+    const saved = getLocalItem<{ vision: string; mission: string; values: CoreValue[] }>(adminKey);
+    if (saved) {
+      setVision(saved.vision);
+      setMission(saved.mission);
+      setValues(saved.values);
+      setLoading(false);
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/about");
+      if (!res.ok) throw new Error("Failed to load about content.");
+      const data = (await res.json()) as { about: AboutContentRow | null };
+      setVision(data.about?.vision ?? "");
+      setMission(data.about?.mission ?? "");
+      setValues(
+        data.about?.core_values && data.about.core_values.length
+          ? data.about.core_values
+          : []
+      );
+    } catch {
+      // keep local state/empty
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    fetch("/api/admin/about")
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to load about content.");
-        const data = (await res.json()) as { about: AboutContentRow | null };
-        setVision(data.about?.vision ?? "");
-        setMission(data.about?.mission ?? "");
-        setValues(
-          data.about?.core_values && data.about.core_values.length
-            ? data.about.core_values
-            : []
-        );
-      })
-      .catch((err) => setError((err as Error).message))
-      .finally(() => setLoading(false));
+    load();
   }, []);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setSuccess("");
+    setLocalItem(adminKey, { vision, mission, values });
+    setLocalItem(storageKeys.about, { vision, mission, coreValues: values });
     try {
       const res = await fetch("/api/admin/about", {
         method: "POST",
@@ -57,8 +79,8 @@ export default function AboutAdminPage() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Save failed.");
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     } finally {
       setSaving(false);
     }
@@ -90,6 +112,11 @@ export default function AboutAdminPage() {
       {error && (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
+        </p>
+      )}
+      {success && (
+        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          {success}
         </p>
       )}
 

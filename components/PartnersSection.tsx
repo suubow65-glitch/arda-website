@@ -1,7 +1,15 @@
-import { getPartners } from "@/lib/content";
+"use client";
 
-export default async function PartnersSection() {
-  const partners = await getPartners();
+import { useEffect, useState } from "react";
+import { getPartners } from "@/lib/content";
+import { mapPartner } from "@/lib/mappers";
+
+export default function PartnersSection() {
+  const [partners, setPartners] = useState<ReturnType<typeof mapPartner>[]>([]);
+
+  useEffect(() => {
+    getPartners().then(setPartners);
+  }, []);
 
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">

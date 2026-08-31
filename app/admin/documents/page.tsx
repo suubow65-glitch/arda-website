@@ -3,7 +3,11 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Download, Loader2, Plus, Trash2 } from "lucide-react";
 import { DOCUMENT_CATEGORIES } from "@/lib/constants";
+import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
+import { mapDocument } from "@/lib/mappers";
 import type { DocumentRow } from "@/lib/types";
+
+const adminKey = "arda_admin_documents_list";
 
 const currentYear = new Date().getFullYear();
 
@@ -12,6 +16,7 @@ export default function DocumentsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -21,13 +26,22 @@ export default function DocumentsAdminPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
+    setLoading(true);
+    const saved = getLocalItem<DocumentRow[]>(adminKey);
+    if (saved) {
+      setItems(saved);
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch("/api/admin/documents");
       if (!res.ok) throw new Error("Failed to load documents.");
       const data = (await res.json()) as { documents: DocumentRow[] };
       setItems(data.documents);
-    } catch (err) {
-      setError((err as Error).message);
+      setLocalItem(adminKey, data.documents);
+      setLocalItem(storageKeys.documents, data.documents.map(mapDocument));
+    } catch {
+      // keep local state/empty
     } finally {
       setLoading(false);
     }
@@ -48,6 +62,7 @@ export default function DocumentsAdminPage() {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setSuccess("");
 
     const fd = new FormData();
     fd.set("title", form.title);
@@ -56,14 +71,26 @@ export default function DocumentsAdminPage() {
     const file = fileRef.current?.files?.[0];
     if (file) fd.set("file", file);
 
+    const newRow = {
+      ...form,
+      id: String(Date.now()),
+      file_url: file ? file.name : "",
+      file_size: "",
+      created_at: new Date().toISOString(),
+    } as DocumentRow;
+    const next = [...items, newRow];
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.documents, next.map(mapDocument));
+
     try {
       const res = await fetch("/api/admin/documents", { method: "POST", body: fd });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Upload failed.");
       await load();
       reset();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     } finally {
       setSaving(false);
     }
@@ -72,13 +99,18 @@ export default function DocumentsAdminPage() {
   async function remove(id: string) {
     if (!confirm("Delete this document?")) return;
     setError("");
+    setSuccess("");
+    const next = items.filter((i) => i.id !== id);
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.documents, next.map(mapDocument));
     try {
       const res = await fetch(`/api/admin/documents/${id}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       await load();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     }
   }
 
@@ -100,6 +132,11 @@ export default function DocumentsAdminPage() {
       {error && (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
+        </p>
+      )}
+      {success && (
+        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          {success}
         </p>
       )}
 

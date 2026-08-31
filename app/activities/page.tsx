@@ -1,14 +1,17 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useEffect, useState } from "react";
 import PageHero from "@/components/PageHero";
 import ActivitiesDirectory from "@/components/ActivitiesDirectory";
 import { getActivities } from "@/lib/content";
+import type { Activity } from "@/data/mockData";
 
-export const metadata: Metadata = {
-  title: "Activities",
-};
+export default function ActivitiesPage() {
+  const [activities, setActivities] = useState<Activity[]>([]);
 
-export default async function ActivitiesPage() {
-  const activities = await getActivities();
+  useEffect(() => {
+    getActivities().then(setActivities);
+  }, []);
 
   return (
     <>

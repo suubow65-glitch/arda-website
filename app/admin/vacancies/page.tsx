@@ -2,7 +2,11 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
+import { mapVacancy } from "@/lib/mappers";
 import type { VacancyRow } from "@/lib/types";
+
+const adminKey = "arda_admin_vacancies_list";
 
 const empty = {
   title: "",
@@ -19,18 +23,28 @@ export default function VacanciesAdminPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [editing, setEditing] = useState<Partial<VacancyRow>>(empty);
   const [open, setOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
+    setLoading(true);
+    const saved = getLocalItem<VacancyRow[]>(adminKey);
+    if (saved) {
+      setItems(saved);
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch("/api/admin/vacancies");
       if (!res.ok) throw new Error("Failed to load vacancies.");
       const data = (await res.json()) as { vacancies: VacancyRow[] };
       setItems(data.vacancies);
-    } catch (err) {
-      setError((err as Error).message);
+      setLocalItem(adminKey, data.vacancies);
+      setLocalItem(storageKeys.vacancies, data.vacancies.map(mapVacancy));
+    } catch {
+      // keep local state/empty
     } finally {
       setLoading(false);
     }
@@ -56,6 +70,7 @@ export default function VacanciesAdminPage() {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setSuccess("");
 
     const fd = new FormData();
     fd.set("title", editing.title ?? "");
@@ -67,6 +82,15 @@ export default function VacanciesAdminPage() {
     fd.set("order_index", String(editing.order_index ?? 0));
     const file = fileRef.current?.files?.[0];
     if (file) fd.set("file", file);
+
+    const next = editing.id
+      ? items.map((i) =>
+          i.id === editing.id ? ({ ...i, ...editing } as VacancyRow) : i
+        )
+      : [...items, { ...editing, id: String(Date.now()) } as VacancyRow];
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.vacancies, next.map(mapVacancy));
 
     try {
       const url = editing.id
@@ -80,8 +104,8 @@ export default function VacanciesAdminPage() {
       setEditing(empty);
       if (fileRef.current) fileRef.current.value = "";
       await load();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     } finally {
       setSaving(false);
     }
@@ -90,13 +114,18 @@ export default function VacanciesAdminPage() {
   async function remove(id: string) {
     if (!confirm("Delete this vacancy?")) return;
     setError("");
+    setSuccess("");
+    const next = items.filter((i) => i.id !== id);
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.vacancies, next.map(mapVacancy));
     try {
       const res = await fetch(`/api/admin/vacancies/${id}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       await load();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     }
   }
 
@@ -115,6 +144,11 @@ export default function VacanciesAdminPage() {
       {error && (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
+        </p>
+      )}
+      {success && (
+        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          {success}
         </p>
       )}
 

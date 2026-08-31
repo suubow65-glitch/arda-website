@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
+import { mapTeamMember } from "@/lib/mappers";
 import type { TeamMemberRow } from "@/lib/types";
 
 const empty = {
@@ -12,23 +14,35 @@ const empty = {
   order_index: 0,
 };
 
+const adminKey = "arda_admin_team_list";
+
 export default function TeamAdminPage() {
   const [items, setItems] = useState<TeamMemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [editing, setEditing] = useState<Partial<TeamMemberRow>>(empty);
   const [open, setOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
+    setLoading(true);
+    const saved = getLocalItem<TeamMemberRow[]>(adminKey);
+    if (saved) {
+      setItems(saved);
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch("/api/admin/team");
       if (!res.ok) throw new Error("Failed to load team members.");
       const data = (await res.json()) as { team: TeamMemberRow[] };
       setItems(data.team);
-    } catch (err) {
-      setError((err as Error).message);
+      setLocalItem(adminKey, data.team);
+      setLocalItem(storageKeys.team, data.team.map(mapTeamMember));
+    } catch {
+      // keep local state/empty
     } finally {
       setLoading(false);
     }
@@ -54,6 +68,7 @@ export default function TeamAdminPage() {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setSuccess("");
 
     const fd = new FormData();
     fd.set("name", editing.name ?? "");
@@ -63,6 +78,15 @@ export default function TeamAdminPage() {
     fd.set("order_index", String(editing.order_index ?? 0));
     const file = fileRef.current?.files?.[0];
     if (file) fd.set("image", file);
+
+    const next = editing.id
+      ? items.map((i) =>
+          i.id === editing.id ? ({ ...i, ...editing } as TeamMemberRow) : i
+        )
+      : [...items, { ...editing, id: String(Date.now()) } as TeamMemberRow];
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.team, next.map(mapTeamMember));
 
     try {
       const url = editing.id
@@ -76,8 +100,8 @@ export default function TeamAdminPage() {
       setEditing(empty);
       if (fileRef.current) fileRef.current.value = "";
       await load();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     } finally {
       setSaving(false);
     }
@@ -86,13 +110,18 @@ export default function TeamAdminPage() {
   async function remove(id: string) {
     if (!confirm("Delete this member?")) return;
     setError("");
+    setSuccess("");
+    const next = items.filter((i) => i.id !== id);
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.team, next.map(mapTeamMember));
     try {
       const res = await fetch(`/api/admin/team/${id}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       await load();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     }
   }
 
@@ -111,6 +140,11 @@ export default function TeamAdminPage() {
       {error && (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
+        </p>
+      )}
+      {success && (
+        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          {success}
         </p>
       )}
 

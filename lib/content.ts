@@ -21,6 +21,7 @@ import {
   mapTeamMember,
   mapVacancy,
 } from "@/lib/mappers";
+import { getLocalItem, storageKeys } from "@/lib/storage";
 import type {
   AboutContentRow,
   ActivityRow,
@@ -33,7 +34,15 @@ import type {
   VacancyRow,
 } from "@/lib/types";
 
+function cacheFirst<T>(key: string, fallback: () => T): T {
+  const cached = getLocalItem<T>(key);
+  if (cached) return cached;
+  return fallback();
+}
+
 export async function getPublishedSlides() {
+  const cached = getLocalItem<ReturnType<typeof mapSlide>[]>(storageKeys.slides);
+  if (cached) return cached;
   if (!isSupabaseConfigured()) return mockSlides;
   try {
     const supabase = createSupabaseClient();
@@ -51,6 +60,8 @@ export async function getPublishedSlides() {
 }
 
 export async function getActivities() {
+  const cached = getLocalItem<ReturnType<typeof mapActivity>[]>(storageKeys.activities);
+  if (cached) return cached;
   if (!isSupabaseConfigured()) return mockActivities;
   try {
     const supabase = createSupabaseClient();
@@ -77,6 +88,8 @@ export async function getLatestActivities(limit = 3) {
 }
 
 export async function getDocuments() {
+  const cached = getLocalItem<ReturnType<typeof mapDocument>[]>(storageKeys.documents);
+  if (cached) return cached;
   if (!isSupabaseConfigured()) return mockDocuments;
   try {
     const supabase = createSupabaseClient();
@@ -93,6 +106,8 @@ export async function getDocuments() {
 }
 
 export async function getSiteSettings() {
+  const cached = getLocalItem<ReturnType<typeof mapSiteSettings>>(storageKeys.settings);
+  if (cached) return cached;
   if (!isSupabaseConfigured()) return mapSiteSettings({} as SiteSettingsRow);
   try {
     const supabase = createSupabaseClient();
@@ -111,6 +126,8 @@ export async function getSiteSettings() {
 }
 
 export async function getAboutContent() {
+  const cached = getLocalItem<{ vision: string; mission: string; coreValues: { title: string; description: string; icon: string }[] }>(storageKeys.about);
+  if (cached) return cached;
   if (!isSupabaseConfigured())
     return { vision: org.vision, mission: org.mission, coreValues };
   try {
@@ -131,6 +148,8 @@ export async function getAboutContent() {
 }
 
 export async function getImpactStats() {
+  const cached = getLocalItem<{ value: number; suffix: string; label: string }[]>(storageKeys.impactStats);
+  if (cached) return cached;
   if (!isSupabaseConfigured()) return impactStats;
   try {
     const supabase = createSupabaseClient();
@@ -147,6 +166,8 @@ export async function getImpactStats() {
 }
 
 export async function getPartners() {
+  const cached = getLocalItem<ReturnType<typeof mapPartner>[]>(storageKeys.partners);
+  if (cached) return cached;
   const fallback = mockPartners.map((p) => ({
     id: p.name,
     name: p.name,
@@ -169,31 +190,9 @@ export async function getPartners() {
   }
 }
 
-export async function submitContactMessage(input: {
-  name: string;
-  email: string;
-  subject: string;
-  message: string;
-}) {
-  if (!isSupabaseConfigured()) return { ok: true, stored: false };
-  try {
-    const supabase = createSupabaseClient();
-    if (!supabase) return { ok: true, stored: false };
-    const { error } = await supabase.from("contact_messages").insert({
-      name: input.name,
-      email: input.email,
-      subject: input.subject,
-      message: input.message,
-      read: false,
-    });
-    if (error) return { ok: false, stored: false, error: error.message };
-    return { ok: true, stored: true };
-  } catch {
-    return { ok: false, stored: false };
-  }
-}
-
 export async function getTeamMembers() {
+  const cached = getLocalItem<ReturnType<typeof mapTeamMember>[]>(storageKeys.team);
+  if (cached) return cached;
   const fallback = [
     ...boardMembers.map((m) => ({
       id: m.name,
@@ -230,6 +229,8 @@ export async function getTeamMembers() {
 }
 
 export async function getVacancies() {
+  const cached = getLocalItem<ReturnType<typeof mapVacancy>[]>(storageKeys.vacancies);
+  if (cached) return cached;
   const fallback = [
     {
       id: "1",
@@ -257,5 +258,29 @@ export async function getVacancies() {
     return (data as VacancyRow[]).map(mapVacancy);
   } catch {
     return fallback;
+  }
+}
+
+export async function submitContactMessage(input: {
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+}) {
+  if (!isSupabaseConfigured()) return { ok: true, stored: false };
+  try {
+    const supabase = createSupabaseClient();
+    if (!supabase) return { ok: true, stored: false };
+    const { error } = await supabase.from("contact_messages").insert({
+      name: input.name,
+      email: input.email,
+      subject: input.subject,
+      message: input.message,
+      read: false,
+    });
+    if (error) return { ok: false, stored: false, error: error.message };
+    return { ok: true, stored: true };
+  } catch {
+    return { ok: false, stored: false };
   }
 }

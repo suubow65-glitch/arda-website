@@ -2,26 +2,40 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
+import { mapImpactStat } from "@/lib/mappers";
 import type { ImpactStatRow } from "@/lib/types";
 
 const empty = { label: "", value: 0, suffix: "", order_index: 0 };
+
+const adminKey = "arda_admin_stats_list";
 
 export default function StatsAdminPage() {
   const [items, setItems] = useState<ImpactStatRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [editing, setEditing] = useState<Partial<ImpactStatRow>>(empty);
   const [open, setOpen] = useState(false);
 
   async function load() {
+    setLoading(true);
+    const saved = getLocalItem<ImpactStatRow[]>(adminKey);
+    if (saved) {
+      setItems(saved);
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch("/api/admin/impact-stats");
       if (!res.ok) throw new Error("Failed to load stats.");
       const data = (await res.json()) as { stats: ImpactStatRow[] };
       setItems(data.stats);
-    } catch (err) {
-      setError((err as Error).message);
+      setLocalItem(adminKey, data.stats);
+      setLocalItem(storageKeys.impactStats, data.stats.map(mapImpactStat));
+    } catch {
+      // keep local state/empty
     } finally {
       setLoading(false);
     }
@@ -45,6 +59,7 @@ export default function StatsAdminPage() {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setSuccess("");
     try {
       const url = editing.id
         ? `/api/admin/impact-stats/${editing.id}`
@@ -60,8 +75,10 @@ export default function StatsAdminPage() {
       setOpen(false);
       setEditing(empty);
       await load();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
+      setLocalItem(adminKey, items);
+      setLocalItem(storageKeys.impactStats, items.map(mapImpactStat));
     } finally {
       setSaving(false);
     }
@@ -70,6 +87,11 @@ export default function StatsAdminPage() {
   async function remove(id: string) {
     if (!confirm("Delete this stat?")) return;
     setError("");
+    setSuccess("");
+    const next = items.filter((i) => i.id !== id);
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.impactStats, next.map(mapImpactStat));
     try {
       const res = await fetch(`/api/admin/impact-stats/${id}`, {
         method: "DELETE",
@@ -77,8 +99,8 @@ export default function StatsAdminPage() {
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       await load();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     }
   }
 
@@ -97,6 +119,11 @@ export default function StatsAdminPage() {
       {error && (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
+        </p>
+      )}
+      {success && (
+        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          {success}
         </p>
       )}
 

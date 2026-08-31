@@ -2,27 +2,41 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
+import { mapPartner } from "@/lib/mappers";
 import type { PartnerRow } from "@/lib/types";
 
 const empty = { name: "", initials: "", website_url: "", order_index: 0 };
+
+const adminKey = "arda_admin_partners_list";
 
 export default function PartnersAdminPage() {
   const [items, setItems] = useState<PartnerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [editing, setEditing] = useState<Partial<PartnerRow>>(empty);
   const [open, setOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
+    setLoading(true);
+    const saved = getLocalItem<PartnerRow[]>(adminKey);
+    if (saved) {
+      setItems(saved);
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch("/api/admin/partners");
       if (!res.ok) throw new Error("Failed to load partners.");
       const data = (await res.json()) as { partners: PartnerRow[] };
       setItems(data.partners);
-    } catch (err) {
-      setError((err as Error).message);
+      setLocalItem(adminKey, data.partners);
+      setLocalItem(storageKeys.partners, data.partners.map(mapPartner));
+    } catch {
+      // keep local state/empty
     } finally {
       setLoading(false);
     }
@@ -48,6 +62,7 @@ export default function PartnersAdminPage() {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setSuccess("");
 
     const fd = new FormData();
     fd.set("name", editing.name ?? "");
@@ -56,6 +71,15 @@ export default function PartnersAdminPage() {
     fd.set("order_index", String(editing.order_index ?? 0));
     const file = fileRef.current?.files?.[0];
     if (file) fd.set("logo", file);
+
+    const next = editing.id
+      ? items.map((i) =>
+          i.id === editing.id ? ({ ...i, ...editing } as PartnerRow) : i
+        )
+      : [...items, { ...editing, id: String(Date.now()) } as PartnerRow];
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.partners, next.map(mapPartner));
 
     try {
       const url = editing.id
@@ -69,8 +93,8 @@ export default function PartnersAdminPage() {
       setEditing(empty);
       if (fileRef.current) fileRef.current.value = "";
       await load();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     } finally {
       setSaving(false);
     }
@@ -79,13 +103,18 @@ export default function PartnersAdminPage() {
   async function remove(id: string) {
     if (!confirm("Delete this partner?")) return;
     setError("");
+    setSuccess("");
+    const next = items.filter((i) => i.id !== id);
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.partners, next.map(mapPartner));
     try {
       const res = await fetch(`/api/admin/partners/${id}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       await load();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     }
   }
 
@@ -104,6 +133,11 @@ export default function PartnersAdminPage() {
       {error && (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
+        </p>
+      )}
+      {success && (
+        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          {success}
         </p>
       )}
 

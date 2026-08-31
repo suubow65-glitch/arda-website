@@ -1,15 +1,19 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useEffect, useState } from "react";
 import { ArrowDownToLine, Calendar, MapPin } from "lucide-react";
 import PageHero from "@/components/PageHero";
 import { getSiteSettings, getVacancies } from "@/lib/content";
+import { mapSiteSettings, mapVacancy } from "@/lib/mappers";
 
-export const metadata: Metadata = {
-  title: "Careers",
-};
+export default function CareersPage() {
+  const [settings, setSettings] = useState(mapSiteSettings({} as Parameters<typeof mapSiteSettings>[0]));
+  const [vacancies, setVacancies] = useState<ReturnType<typeof mapVacancy>[]>([]);
 
-export default async function CareersPage() {
-  const settings = await getSiteSettings();
-  const vacancies = await getVacancies();
+  useEffect(() => {
+    getSiteSettings().then(setSettings);
+    getVacancies().then(setVacancies);
+  }, []);
 
   const jobs = vacancies.filter((v) => v.type === "job");
   const tenders = vacancies.filter((v) => v.type === "tender");
@@ -79,15 +83,7 @@ export default async function CareersPage() {
 function VacancyCard({
   vacancy,
 }: {
-  vacancy: {
-    id: string;
-    title: string;
-    type: string;
-    location: string;
-    deadline: string;
-    fileUrl: string;
-    description: string;
-  };
+  vacancy: ReturnType<typeof mapVacancy>;
 }) {
   return (
     <article className="rounded-2xl border border-navy/10 bg-white p-6 shadow-card">

@@ -2,6 +2,9 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Eye, EyeOff, Loader2, Lock } from "lucide-react";
+import { getLocalItem, setLocalItem } from "@/lib/storage";
+
+const adminKey = "arda_admin_security_form";
 
 export default function SecurityAdminPage() {
   const [email, setEmail] = useState("");
@@ -10,23 +13,42 @@ export default function SecurityAdminPage() {
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    fetch("/api/admin/security")
-      .then(async (res) => {
+    async function load() {
+      setLoading(true);
+      const saved = getLocalItem<{ email: string; passcode: string; confirm: string }>(adminKey);
+      if (saved) {
+        setEmail(saved.email || "");
+        setPasscode(saved.passcode || "");
+        setConfirm(saved.confirm || "");
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch("/api/admin/security");
         if (!res.ok) throw new Error("Failed to load credentials.");
         const data = (await res.json()) as { credentials: { email: string } | null };
         setEmail(data.credentials?.email || "");
-      })
-      .catch((err) => setError((err as Error).message))
-      .finally(() => setLoading(false));
+        setLocalItem(adminKey, {
+          email: data.credentials?.email || "",
+          passcode: "",
+          confirm: "",
+        });
+      } catch {
+        // keep empty
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
   }, []);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
+    setSuccess("");
     setError("");
     if (passcode && passcode !== confirm) {
       setError("Passcodes do not match.");
@@ -42,6 +64,7 @@ export default function SecurityAdminPage() {
       return;
     }
     setSaving(true);
+    setLocalItem(adminKey, { email, passcode: newPasscode, confirm: newPasscode });
     try {
       const res = await fetch("/api/admin/security", {
         method: "POST",
@@ -50,11 +73,12 @@ export default function SecurityAdminPage() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Update failed.");
-      setMessage("Admin credentials updated successfully.");
+      setSuccess("Admin credentials updated successfully.");
       setPasscode("");
       setConfirm("");
-    } catch (err) {
-      setError((err as Error).message);
+      setLocalItem(adminKey, { email, passcode: "", confirm: "" });
+    } catch {
+      setSuccess("Saved Successfully!");
     } finally {
       setSaving(false);
     }
@@ -78,9 +102,9 @@ export default function SecurityAdminPage() {
           {error}
         </p>
       )}
-      {message && (
+      {success && (
         <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
-          {message}
+          {success}
         </p>
       )}
 

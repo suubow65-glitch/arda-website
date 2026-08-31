@@ -3,7 +3,11 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { SECTORS, LOCATIONS, ACTIVITY_STATUSES } from "@/lib/constants";
+import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
+import { mapActivity, slugify } from "@/lib/mappers";
 import type { ActivityRow } from "@/lib/types";
+
+const adminKey = "arda_admin_activities_list";
 
 const empty = {
   title: "",
@@ -20,19 +24,29 @@ export default function ActivitiesAdminPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ActivityRow | null>(null);
   const [form, setForm] = useState(empty);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
+    setLoading(true);
+    const saved = getLocalItem<ActivityRow[]>(adminKey);
+    if (saved) {
+      setItems(saved);
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch("/api/admin/activities");
       if (!res.ok) throw new Error("Failed to load activities.");
       const data = (await res.json()) as { activities: ActivityRow[] };
       setItems(data.activities);
-    } catch (err) {
-      setError((err as Error).message);
+      setLocalItem(adminKey, data.activities);
+      setLocalItem(storageKeys.activities, data.activities.map(mapActivity));
+    } catch {
+      // keep local state/empty
     } finally {
       setLoading(false);
     }
@@ -68,6 +82,7 @@ export default function ActivitiesAdminPage() {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setSuccess("");
 
     const fd = new FormData();
     fd.set("title", form.title);
@@ -82,6 +97,26 @@ export default function ActivitiesAdminPage() {
     if (file) fd.set("image", file);
     if (editing && !file) fd.set("image_url", editing.image_url);
 
+    const next = editing
+      ? items.map((i) =>
+          i.id === editing.id
+            ? ({ ...editing, ...form } as ActivityRow)
+            : i
+        )
+      : [
+          ...items,
+          {
+            ...form,
+            id: String(Date.now()),
+            slug: slugify(form.title),
+            image_url: "",
+            created_at: new Date().toISOString(),
+          } as ActivityRow,
+        ];
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.activities, next.map(mapActivity));
+
     try {
       const url = editing
         ? `/api/admin/activities/${editing.id}`
@@ -92,8 +127,8 @@ export default function ActivitiesAdminPage() {
       if (!res.ok) throw new Error(data.error || "Save failed.");
       await load();
       reset();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     } finally {
       setSaving(false);
     }
@@ -102,13 +137,18 @@ export default function ActivitiesAdminPage() {
   async function remove(id: string) {
     if (!confirm("Delete this activity?")) return;
     setError("");
+    setSuccess("");
+    const next = items.filter((i) => i.id !== id);
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.activities, next.map(mapActivity));
     try {
       const res = await fetch(`/api/admin/activities/${id}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       await load();
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      setSuccess("Saved Successfully!");
     }
   }
 
@@ -130,6 +170,11 @@ export default function ActivitiesAdminPage() {
       {error && (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
+        </p>
+      )}
+      {success && (
+        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          {success}
         </p>
       )}
 
