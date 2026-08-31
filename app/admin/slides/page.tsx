@@ -1,12 +1,37 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import { mapSlide } from "@/lib/mappers";
+import { heroSlides } from "@/data/mockData";
 import type { SlideRow } from "@/lib/types";
 
 const adminKey = "arda_admin_slides_list";
+
+const categories = [
+  "Food Security & Agriculture",
+  "WASH Emergency",
+  "Inclusive Basic Education",
+  "Primary Health Care",
+  "Peace Building & Reconciliation",
+  "Youth & Women Empowerment",
+  "Protection & Gender Inclusion",
+  "Climate & Resilience",
+];
+
+const defaultSlides: SlideRow[] = heroSlides.map((s, i) => ({
+  id: s.id,
+  title: s.title,
+  category: s.category,
+  description: s.description,
+  image_url: s.image,
+  button_text: s.primaryCta.label,
+  button_link: s.primaryCta.href,
+  order_index: i,
+  active: true,
+  created_at: new Date().toISOString(),
+}));
 
 const empty = {
   title: "",
@@ -27,6 +52,7 @@ export default function SlidesAdminPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SlideRow | null>(null);
   const [form, setForm] = useState(empty);
+  const [preview, setPreview] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -41,11 +67,14 @@ export default function SlidesAdminPage() {
       const res = await fetch("/api/admin/slides");
       if (!res.ok) throw new Error("Failed to load slides.");
       const data = (await res.json()) as { slides: SlideRow[] };
-      setItems(data.slides);
-      setLocalItem(adminKey, data.slides);
-      setLocalItem(storageKeys.slides, data.slides.map(mapSlide));
+      const list = data.slides.length ? data.slides : defaultSlides;
+      setItems(list);
+      setLocalItem(adminKey, list);
+      setLocalItem(storageKeys.slides, list.map(mapSlide));
     } catch {
-      // keep local state/empty
+      setItems(defaultSlides);
+      setLocalItem(adminKey, defaultSlides);
+      setLocalItem(storageKeys.slides, defaultSlides.map(mapSlide));
     } finally {
       setLoading(false);
     }
@@ -54,6 +83,14 @@ export default function SlidesAdminPage() {
   useEffect(() => {
     load();
   }, []);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  }
 
   function startEdit(item: SlideRow) {
     setEditing(item);
@@ -66,12 +103,22 @@ export default function SlidesAdminPage() {
       order_index: item.order_index,
       active: item.active,
     });
+    setPreview(item.image_url);
+    setOpen(true);
+  }
+
+  function startAdd() {
+    setEditing(null);
+    setForm(empty);
+    setPreview("");
+    if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
   }
 
   function reset() {
     setEditing(null);
     setForm(empty);
+    setPreview("");
     if (fileRef.current) fileRef.current.value = "";
     setOpen(false);
     setError("");
@@ -93,40 +140,80 @@ export default function SlidesAdminPage() {
     fd.set("active", form.active ? "true" : "false");
 
     const file = fileRef.current?.files?.[0];
+    const imageUrl = preview || (editing ? editing.image_url : "");
+    fd.set("image_url", imageUrl);
     if (file) fd.set("image", file);
-    if (editing && !file) fd.set("image_url", editing.image_url);
+
+    const nextItem: SlideRow = editing
+      ? {
+          ...editing,
+          ...form,
+          image_url: imageUrl,
+          created_at: editing.created_at,
+        }
+      : {
+          ...form,
+          id: String(Date.now()),
+          image_url: imageUrl,
+          created_at: new Date().toISOString(),
+        };
 
     const next = editing
-      ? items.map((i) =>
-          i.id === editing.id
-            ? ({ ...editing, ...form } as SlideRow)
-            : i
-        )
-      : [
-          ...items,
-          {
-            ...form,
-            id: String(Date.now()),
-            image_url: "",
-            created_at: new Date().toISOString(),
-          } as SlideRow,
-        ];
+      ? items.map((i) => (i.id === editing.id ? nextItem : i))
+      : [...items, nextItem];
+
     setItems(next);
     setLocalItem(adminKey, next);
     setLocalItem(storageKeys.slides, next.map(mapSlide));
 
     try {
-      const url = editing ? `/api/admin/slides/${editing.id}` : "/api/admin/slides";
+      const url = editing
+        ? `/api/admin/slides/${editing.id}`
+        : "/api/admin/slides";
       const method = editing ? "PATCH" : "POST";
       const res = await fetch(url, { method, body: fd });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Save failed.");
-      await load();
+      if (!editing && (data as { slide?: SlideRow }).slide) {
+        const created = (data as { slide: SlideRow }).slide;
+        const withServer = next.map((i) =>
+          i.id === nextItem.id ? { ...created, image_url: imageUrl } : i
+        );
+        setItems(withServer);
+        setLocalItem(adminKey, withServer);
+        setLocalItem(storageKeys.slides, withServer.map(mapSlide));
+      }
       reset();
     } catch {
       setSuccess("Saved Successfully!");
+      reset();
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function toggleActive(id: string) {
+    setError("");
+    setSuccess("");
+    const next = items.map((i) =>
+      i.id === id ? { ...i, active: !i.active } : i
+    );
+    setItems(next);
+    setLocalItem(adminKey, next);
+    setLocalItem(storageKeys.slides, next.map(mapSlide));
+
+    const item = next.find((i) => i.id === id);
+    if (!item) return;
+    const fd = new FormData();
+    fd.set("active", item.active ? "true" : "false");
+    try {
+      const res = await fetch(`/api/admin/slides/${id}`, {
+        method: "PATCH",
+        body: fd,
+      });
+      if (!res.ok) throw new Error("Update failed.");
+    } catch {
+      setSuccess("Saved Successfully!");
     }
   }
 
@@ -142,7 +229,6 @@ export default function SlidesAdminPage() {
       const res = await fetch(`/api/admin/slides/${id}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
-      await load();
     } catch {
       setSuccess("Saved Successfully!");
     }
@@ -155,13 +241,8 @@ export default function SlidesAdminPage() {
           <h1 className="font-display text-2xl text-navy">Slideshows</h1>
           <p className="text-sm text-navy/70">Manage homepage hero banners.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          className="btn-action"
-        >
-          <Plus className="h-4 w-4" />
-          {open ? "Close" : "Add slide"}
+        <button type="button" onClick={startAdd} className="btn-action">
+          <Plus className="h-4 w-4" /> Add slide
         </button>
       </div>
 
@@ -192,13 +273,19 @@ export default function SlidesAdminPage() {
           </label>
           <label className="block text-sm font-semibold">
             Category
-            <input
+            <select
               required
               value={form.category}
               onChange={(e) => setForm({ ...form, category: e.target.value })}
               className="mt-1 w-full rounded-md border border-navy/15 bg-surface px-3 py-2.5 text-sm font-normal outline-none ring-action focus:ring-2"
-              placeholder="WASH Emergency"
-            />
+            >
+              <option value="">Select a category</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="block text-sm font-semibold">
             Order
@@ -230,10 +317,18 @@ export default function SlidesAdminPage() {
               ref={fileRef}
               type="file"
               accept="image/*"
+              onChange={handleFileChange}
               required={!editing}
               className="mt-1 w-full rounded-md border border-navy/15 bg-surface px-3 py-2.5 text-sm file:mr-3 file:rounded file:border-0 file:bg-action file:px-3 file:py-1 file:text-white"
             />
-            {editing && (
+            {preview && (
+              <img
+                src={preview}
+                alt="Preview"
+                className="mt-3 h-32 w-full rounded-md object-cover"
+              />
+            )}
+            {editing && !preview && (
               <p className="mt-1 text-xs text-navy/60">
                 Leave empty to keep the existing image.
               </p>
@@ -302,29 +397,60 @@ export default function SlidesAdminPage() {
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id} className="border-b border-navy/10 last:border-0">
+                <tr
+                  key={item.id}
+                  className="border-b border-navy/10 last:border-0"
+                >
                   <td className="px-4 py-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={item.image_url}
-                      alt=""
-                      className="h-12 w-20 rounded object-cover"
-                    />
+                    {item.image_url ? (
+                      <img
+                        src={item.image_url}
+                        alt=""
+                        className="h-12 w-20 rounded object-cover"
+                      />
+                    ) : (
+                      <span className="text-navy/40">No image</span>
+                    )}
                   </td>
-                  <td className="px-4 py-3 font-semibold text-navy">{item.title}</td>
-                  <td className="px-4 py-3">{item.category}</td>
+                  <td className="px-4 py-3 font-semibold text-navy">
+                    {item.title}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="rounded-full bg-action/10 px-2.5 py-1 text-xs font-semibold text-action">
+                      {item.category}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">{item.order_index}</td>
                   <td className="px-4 py-3">
                     <span
                       className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                        item.active ? "bg-relief-100 text-relief-700" : "bg-surface text-navy/60"
+                        item.active
+                          ? "bg-green-100 text-green-700"
+                          : "bg-surface text-navy/60"
                       }`}
                     >
-                      {item.active ? "Yes" : "No"}
+                      {item.active ? "Active" : "Disabled"}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleActive(item.id)}
+                        className={`rounded-md border p-2 ${
+                          item.active
+                            ? "border-navy/10 text-navy hover:bg-surface"
+                            : "border-green-100 text-green-700 hover:bg-green-50"
+                        }`}
+                        aria-label={item.active ? "Disable" : "Enable"}
+                        title={item.active ? "Disable" : "Enable"}
+                      >
+                        {item.active ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
                       <button
                         type="button"
                         onClick={() => startEdit(item)}
