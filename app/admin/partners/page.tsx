@@ -4,11 +4,22 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import { mapPartner } from "@/lib/mappers";
+import { partners as mockPartners } from "@/data/mockData";
 import type { PartnerRow } from "@/lib/types";
 
 const empty = { name: "", initials: "", website_url: "", order_index: 0 };
 
 const adminKey = "arda_admin_partners_list";
+
+const defaultPartners: PartnerRow[] = mockPartners.map((p, i) => ({
+  id: p.name,
+  name: p.name,
+  initials: p.initials,
+  logo_url: p.logoUrl || null,
+  website_url: p.websiteUrl || null,
+  order_index: i,
+  created_at: new Date().toISOString(),
+}));
 
 export default function PartnersAdminPage() {
   const [items, setItems] = useState<PartnerRow[]>([]);
@@ -32,11 +43,14 @@ export default function PartnersAdminPage() {
       const res = await fetch("/api/admin/partners");
       if (!res.ok) throw new Error("Failed to load partners.");
       const data = (await res.json()) as { partners: PartnerRow[] };
-      setItems(data.partners);
-      setLocalItem(adminKey, data.partners);
-      setLocalItem(storageKeys.partners, data.partners.map(mapPartner));
+      const list = data.partners.length ? data.partners : defaultPartners;
+      setItems(list);
+      setLocalItem(adminKey, list);
+      setLocalItem(storageKeys.partners, list.map(mapPartner));
     } catch {
-      // keep local state/empty
+      setItems(defaultPartners);
+      setLocalItem(adminKey, defaultPartners);
+      setLocalItem(storageKeys.partners, defaultPartners.map(mapPartner));
     } finally {
       setLoading(false);
     }

@@ -8,6 +8,7 @@ import type { SlideRow } from "@/lib/types";
 
 const adminKey = "arda_admin_slides_list";
 const overrideKey = "arda_slides_override";
+const customKey = "arda_user_custom_slides_v1";
 
 const categories = [
   "Food Security & Agriculture",
@@ -45,6 +46,10 @@ const empty = {
 
 function persistSlides(rows: SlideRow[]) {
   if (typeof window === "undefined") return;
+  localStorage.setItem(
+    customKey,
+    JSON.stringify({ userModified: true, slides: rows })
+  );
   localStorage.setItem(adminKey, JSON.stringify(rows));
   localStorage.setItem(overrideKey, JSON.stringify(rows));
   localStorage.setItem(storageKeys.slides, JSON.stringify(rows));
@@ -65,6 +70,15 @@ export default function SlidesAdminPage() {
 
   async function load() {
     setLoading(true);
+    const custom = getLocalItem<{ userModified: boolean; slides: SlideRow[] }>(
+      customKey
+    );
+    if (custom?.userModified && custom.slides?.length) {
+      setItems(custom.slides);
+      persistSlides(custom.slides);
+      setLoading(false);
+      return;
+    }
     const saved = getLocalItem<SlideRow[]>(adminKey);
     if (saved) {
       setItems(saved);

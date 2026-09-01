@@ -23,24 +23,53 @@ export default function HeroSlider() {
     slidesRef.current = slides;
   }, [slides]);
 
+  const parseRows = useCallback((rows: unknown[]): HeroSlide[] | null => {
+    const active = rows
+      .filter((s: any) => s.active !== false)
+      .map((s: any) => {
+        if (s.image_url) return mapSlide(s as SlideRow);
+        return s as HeroSlide;
+      });
+    return active.length > 0 ? active : null;
+  }, []);
+
   const loadFromStorage = useCallback(() => {
+    if (typeof window === "undefined") return false;
+
+    try {
+      const customRaw = localStorage.getItem("arda_user_custom_slides_v1");
+      if (customRaw) {
+        const custom = JSON.parse(customRaw) as {
+          userModified?: boolean;
+          slides?: unknown[];
+        };
+        if (
+          custom.userModified &&
+          Array.isArray(custom.slides) &&
+          custom.slides.length > 0
+        ) {
+          const active = parseRows(custom.slides);
+          if (active) {
+            setSlides(active);
+            hasLocal.current = true;
+            return true;
+          }
+        }
+      }
+    } catch {
+      // Keep fallback
+    }
+
     const raw =
-      (typeof window !== "undefined" &&
-        (localStorage.getItem("arda_slides_override") ||
-          localStorage.getItem("arda_admin_slides_list") ||
-          localStorage.getItem(storageKeys.slides))) ||
-      null;
+      localStorage.getItem("arda_slides_override") ||
+      localStorage.getItem("arda_admin_slides_list") ||
+      localStorage.getItem(storageKeys.slides);
     if (!raw) return false;
     try {
       const parsed = JSON.parse(raw) as unknown[];
       if (!Array.isArray(parsed) || parsed.length === 0) return false;
-      const active = parsed
-        .filter((s: any) => s.active !== false)
-        .map((s: any) => {
-          if (s.image_url) return mapSlide(s as SlideRow);
-          return s as HeroSlide;
-        });
-      if (active.length > 0) {
+      const active = parseRows(parsed);
+      if (active) {
         setSlides(active);
         hasLocal.current = true;
         return true;
@@ -49,13 +78,14 @@ export default function HeroSlider() {
       // Keep fallback
     }
     return false;
-  }, []);
+  }, [parseRows]);
 
   useEffect(() => {
     loadFromStorage();
 
     const onStorage = (e: StorageEvent) => {
       if (
+        e.key === "arda_user_custom_slides_v1" ||
         e.key === "arda_slides_override" ||
         e.key === "arda_admin_slides_list" ||
         e.key === storageKeys.slides

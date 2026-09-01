@@ -12,16 +12,14 @@ import {
   Twitter,
 } from "lucide-react";
 import { navLinks } from "@/data/mockData";
-import { getPartners, getSiteSettings } from "@/lib/content";
-import { mapPartner, mapSiteSettings } from "@/lib/mappers";
+import { getSiteSettings } from "@/lib/content";
+import { mapSiteSettings } from "@/lib/mappers";
 
 export default function Footer() {
   const [settings, setSettings] = useState(mapSiteSettings({} as Parameters<typeof mapSiteSettings>[0]));
-  const [partners, setPartners] = useState<ReturnType<typeof mapPartner>[]>([]);
 
   useEffect(() => {
     getSiteSettings().then(setSettings);
-    getPartners().then(setPartners);
   }, []);
 
   const socials = [
@@ -119,44 +117,6 @@ export default function Footer() {
                 <Icon className="h-4 w-4" />
               </a>
             ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="border-t border-white/10">
-        <div className="container-arda py-10">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-relief">
-            Partners
-          </h2>
-          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-            {partners.map((partner) =>
-              partner.logoUrl ? (
-                <a
-                  key={partner.id}
-                  href={partner.websiteUrl || "#"}
-                    target={partner.websiteUrl ? "_blank" : undefined}
-                rel={partner.websiteUrl ? "noopener noreferrer" : undefined}
-                className="flex h-24 items-center justify-center rounded-2xl border border-white/10 bg-white p-3 transition hover:opacity-90"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={partner.logoUrl}
-                  alt={partner.name}
-                  className="h-14 w-auto object-contain"
-                />
-              </a>
-              ) : (
-                <div
-                  key={partner.id}
-                  className="flex h-24 flex-col items-center justify-center rounded-2xl border border-dashed border-white/20 p-3 text-center"
-                >
-                  <span className="text-xs font-bold tracking-wide">
-                    {partner.initials}
-                  </span>
-                  <span className="mt-1 text-[11px] text-white/70">{partner.name}</span>
-                </div>
-              )
-            )}
           </div>
         </div>
       </div>

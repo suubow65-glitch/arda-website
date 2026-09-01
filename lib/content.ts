@@ -168,12 +168,13 @@ export async function getImpactStats() {
 export async function getPartners() {
   const cached = getLocalItem<ReturnType<typeof mapPartner>[]>(storageKeys.partners);
   if (cached) return cached;
-  const fallback = mockPartners.map((p) => ({
+  const fallback = mockPartners.map((p, i) => ({
     id: p.name,
     name: p.name,
     initials: p.initials,
-    logoUrl: "",
-    websiteUrl: "",
+    logoUrl: p.logoUrl || "",
+    websiteUrl: p.websiteUrl || "",
+    orderIndex: i,
   }));
   if (!isSupabaseConfigured()) return fallback;
   try {

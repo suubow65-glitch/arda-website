@@ -410,12 +410,17 @@ export const documents: DocumentItem[] = [
   },
 ];
 
+function badge(text: string, color: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80" viewBox="0 0 200 80"><rect width="200" height="80" rx="16" fill="${color}"/><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="32" font-family="Arial, sans-serif" font-weight="bold">${text}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 export const partners = [
-  { name: "UNICEF", initials: "UNICEF" },
-  { name: "KOREA / UNICEF & MoH Southwest State", initials: "KOREA" },
-  { name: "Canadian Development Agency (CDA)", initials: "CDA" },
-  { name: "AGDAC (Norway)", initials: "AGDAC" },
-  { name: "UN OCHA", initials: "OCHA" },
+  { name: "UNICEF", initials: "UNICEF", logoUrl: badge("UNICEF", "#1CABE2"), websiteUrl: "" },
+  { name: "KOREA / UNICEF & MoH Southwest State", initials: "KOREA", logoUrl: badge("KOREA", "#C60C30"), websiteUrl: "" },
+  { name: "Canadian Development Agency (CDA)", initials: "CDA", logoUrl: badge("CDA", "#D52B1E"), websiteUrl: "" },
+  { name: "AGDAC (Norway)", initials: "AGDAC", logoUrl: badge("AGDAC", "#2E7D32"), websiteUrl: "" },
+  { name: "UN OCHA", initials: "OCHA", logoUrl: badge("OCHA", "#0072BB"), websiteUrl: "" },
 ];
 
 export const leadership: PersonProfile[] = [
