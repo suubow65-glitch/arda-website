@@ -59,21 +59,33 @@ export async function getPublishedSlides() {
   }
 }
 
+function sortByDateDesc<T extends { date: string }>(list: T[]): T[] {
+  return [...list].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+}
+
 export async function getActivities() {
+  const custom = getLocalItem<{ userModified: boolean; activities: ActivityRow[] }>(
+    "arda_user_custom_activities_v1"
+  );
+  if (custom?.userModified && custom.activities?.length) {
+    return sortByDateDesc(custom.activities.map(mapActivity));
+  }
   const cached = getLocalItem<ReturnType<typeof mapActivity>[]>(storageKeys.activities);
-  if (cached) return cached;
-  if (!isSupabaseConfigured()) return mockActivities;
+  if (cached) return sortByDateDesc(cached);
+  if (!isSupabaseConfigured()) return sortByDateDesc(mockActivities);
   try {
     const supabase = createSupabaseClient();
-    if (!supabase) return mockActivities;
+    if (!supabase) return sortByDateDesc(mockActivities);
     const { data, error } = await supabase
       .from("activities")
       .select("*")
       .order("date", { ascending: false });
-    if (error || !data?.length) return mockActivities;
-    return (data as ActivityRow[]).map(mapActivity);
+    if (error || !data?.length) return sortByDateDesc(mockActivities);
+    return sortByDateDesc((data as ActivityRow[]).map(mapActivity));
   } catch {
-    return mockActivities;
+    return sortByDateDesc(mockActivities);
   }
 }
 

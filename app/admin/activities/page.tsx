@@ -1,13 +1,20 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
-import { SECTORS, LOCATIONS, ACTIVITY_STATUSES } from "@/lib/constants";
+import {
+  SECTORS,
+  LOCATIONS,
+  ACTIVITY_STATUSES,
+  ACTIVITY_FALLBACK_IMAGE,
+} from "@/lib/constants";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import { mapActivity, slugify } from "@/lib/mappers";
+import { activities as mockActivities } from "@/data/mockData";
 import type { ActivityRow } from "@/lib/types";
 
 const adminKey = "arda_admin_activities_list";
+const customKey = "arda_user_custom_activities_v1";
 
 const empty = {
   title: "",
@@ -19,6 +26,38 @@ const empty = {
   status: "Ongoing" as const,
 };
 
+const defaultActivities: ActivityRow[] = mockActivities.map((a) => ({
+  id: a.id,
+  title: a.title,
+  slug: a.slug,
+  sector: a.sector,
+  location: a.location,
+  date: a.date,
+  image_url: a.image,
+  description: a.summary,
+  content: a.description,
+  status: a.status,
+  created_at: new Date().toISOString(),
+}));
+
+function sortByDateDesc(rows: ActivityRow[]): ActivityRow[] {
+  return [...rows].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+}
+
+function persistActivities(rows: ActivityRow[]) {
+  const ordered = sortByDateDesc(rows);
+  if (typeof window !== "undefined") {
+    localStorage.setItem(
+      customKey,
+      JSON.stringify({ userModified: true, activities: ordered })
+    );
+    localStorage.setItem(adminKey, JSON.stringify(ordered));
+  }
+  setLocalItem(storageKeys.activities, ordered.map(mapActivity));
+}
+
 export default function ActivitiesAdminPage() {
   const [items, setItems] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,13 +67,27 @@ export default function ActivitiesAdminPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ActivityRow | null>(null);
   const [form, setForm] = useState(empty);
+  const [preview, setPreview] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const displayed = useMemo(() => sortByDateDesc(items), [items]);
 
   async function load() {
     setLoading(true);
+    const custom = getLocalItem<{
+      userModified: boolean;
+      activities: ActivityRow[];
+    }>(customKey);
+    if (custom?.userModified && custom.activities?.length) {
+      setItems(custom.activities);
+      persistActivities(custom.activities);
+      setLoading(false);
+      return;
+    }
     const saved = getLocalItem<ActivityRow[]>(adminKey);
     if (saved) {
       setItems(saved);
+      persistActivities(saved);
       setLoading(false);
       return;
     }
@@ -42,11 +95,12 @@ export default function ActivitiesAdminPage() {
       const res = await fetch("/api/admin/activities");
       if (!res.ok) throw new Error("Failed to load activities.");
       const data = (await res.json()) as { activities: ActivityRow[] };
-      setItems(data.activities);
-      setLocalItem(adminKey, data.activities);
-      setLocalItem(storageKeys.activities, data.activities.map(mapActivity));
+      const list = data.activities.length ? data.activities : defaultActivities;
+      setItems(list);
+      persistActivities(list);
     } catch {
-      // keep local state/empty
+      setItems(defaultActivities);
+      persistActivities(defaultActivities);
     } finally {
       setLoading(false);
     }
@@ -55,6 +109,14 @@ export default function ActivitiesAdminPage() {
   useEffect(() => {
     load();
   }, []);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  }
 
   function startEdit(item: ActivityRow) {
     setEditing(item);
@@ -65,14 +127,24 @@ export default function ActivitiesAdminPage() {
       date: item.date,
       description: item.description,
       content: item.content || "",
-      status: item.status as typeof empty.status,
+      status: (item.status === "Completed" ? "Completed" : "Ongoing") as typeof empty.status,
     });
+    setPreview(item.image_url);
+    setOpen(true);
+  }
+
+  function startAdd() {
+    setEditing(null);
+    setForm(empty);
+    setPreview("");
+    if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
   }
 
   function reset() {
     setEditing(null);
     setForm(empty);
+    setPreview("");
     if (fileRef.current) fileRef.current.value = "";
     setOpen(false);
     setError("");
@@ -94,28 +166,34 @@ export default function ActivitiesAdminPage() {
     fd.set("status", form.status);
 
     const file = fileRef.current?.files?.[0];
+    const imageUrl = preview || (editing ? editing.image_url : "");
     if (file) fd.set("image", file);
-    if (editing && !file) fd.set("image_url", editing.image_url);
+    if (editing && !file) fd.set("image_url", imageUrl);
+
+    const nextItem: ActivityRow = editing
+      ? {
+          ...editing,
+          ...form,
+          image_url: imageUrl,
+          slug: slugify(form.title),
+          status: form.status,
+          created_at: editing.created_at,
+        }
+      : {
+          ...form,
+          id: String(Date.now()),
+          slug: slugify(form.title),
+          image_url: imageUrl,
+          created_at: new Date().toISOString(),
+        };
 
     const next = editing
-      ? items.map((i) =>
-          i.id === editing.id
-            ? ({ ...editing, ...form } as ActivityRow)
-            : i
-        )
-      : [
-          ...items,
-          {
-            ...form,
-            id: String(Date.now()),
-            slug: slugify(form.title),
-            image_url: "",
-            created_at: new Date().toISOString(),
-          } as ActivityRow,
-        ];
-    setItems(next);
-    setLocalItem(adminKey, next);
-    setLocalItem(storageKeys.activities, next.map(mapActivity));
+      ? items.map((i) => (i.id === editing.id ? nextItem : i))
+      : [nextItem, ...items];
+
+    const ordered = sortByDateDesc(next);
+    setItems(ordered);
+    persistActivities(ordered);
 
     try {
       const url = editing
@@ -129,6 +207,7 @@ export default function ActivitiesAdminPage() {
       reset();
     } catch {
       setSuccess("Saved Successfully!");
+      reset();
     } finally {
       setSaving(false);
     }
@@ -139,9 +218,9 @@ export default function ActivitiesAdminPage() {
     setError("");
     setSuccess("");
     const next = items.filter((i) => i.id !== id);
-    setItems(next);
-    setLocalItem(adminKey, next);
-    setLocalItem(storageKeys.activities, next.map(mapActivity));
+    const ordered = sortByDateDesc(next);
+    setItems(ordered);
+    persistActivities(ordered);
     try {
       const res = await fetch(`/api/admin/activities/${id}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };
@@ -161,9 +240,8 @@ export default function ActivitiesAdminPage() {
             Manage field programmes and project pages.
           </p>
         </div>
-        <button type="button" onClick={() => setOpen(!open)} className="btn-action">
-          <Plus className="h-4 w-4" />
-          {open ? "Close" : "Add activity"}
+        <button type="button" onClick={startAdd} className="btn-action">
+          <Plus className="h-4 w-4" /> Add activity
         </button>
       </div>
 
@@ -257,10 +335,18 @@ export default function ActivitiesAdminPage() {
               ref={fileRef}
               type="file"
               accept="image/*"
+              onChange={handleFileChange}
               required={!editing}
               className="mt-1 w-full rounded-md border border-navy/15 bg-surface px-3 py-2.5 text-sm file:mr-3 file:rounded file:border-0 file:bg-action file:px-3 file:py-1 file:text-white"
             />
-            {editing && (
+            {preview && (
+              <img
+                src={preview}
+                alt="Preview"
+                className="mt-3 h-32 w-full rounded-md object-cover"
+              />
+            )}
+            {editing && !preview && (
               <p className="mt-1 text-xs text-navy/60">
                 Leave empty to keep the existing image.
               </p>
@@ -319,20 +405,41 @@ export default function ActivitiesAdminPage() {
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="border-b border-navy/10 last:border-0">
+              {displayed.map((item) => (
+                <tr
+                  key={item.id}
+                  className="border-b border-navy/10 last:border-0"
+                >
                   <td className="px-4 py-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={item.image_url}
-                      alt=""
-                      className="h-12 w-20 rounded object-cover"
-                    />
+                    {item.image_url ? (
+                      <img
+                        src={item.image_url}
+                        alt=""
+                        className="h-12 w-20 rounded object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = ACTIVITY_FALLBACK_IMAGE;
+                        }}
+                      />
+                    ) : (
+                      <span className="text-navy/50">-</span>
+                    )}
                   </td>
-                  <td className="px-4 py-3 font-semibold text-navy">{item.title}</td>
-                  <td className="px-4 py-3">{item.sector}</td>
-                  <td className="px-4 py-3">{item.location}</td>
-                  <td className="px-4 py-3">{item.date}</td>
+                  <td className="px-4 py-3 font-semibold text-navy">
+                    {item.title}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="rounded-full bg-relief/10 px-2.5 py-1 text-xs font-semibold text-relief">
+                      {item.sector}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="rounded-full bg-navy/10 px-2.5 py-1 text-xs font-semibold text-navy">
+                      {item.location}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {new Date(item.date).toLocaleDateString("en-GB")}
+                  </td>
                   <td className="px-4 py-3">
                     <span
                       className={`rounded-full px-2 py-1 text-xs font-semibold ${

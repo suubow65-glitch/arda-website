@@ -1,16 +1,24 @@
 import Link from "next/link";
 import { ArrowRight, Calendar, MapPin } from "lucide-react";
+import { ACTIVITY_FALLBACK_IMAGE } from "@/lib/constants";
+import SafeImage from "@/components/SafeImage";
 import type { Activity } from "@/data/mockData";
 
 export default function ActivityCard({ activity }: { activity: Activity }) {
+  const imageSrc =
+    (activity as { imageUrl?: string }).imageUrl ||
+    (activity as { image_url?: string }).image_url ||
+    activity.image ||
+    "";
+
   return (
     <article className="flex flex-col overflow-hidden rounded-2xl border border-navy/10 bg-white shadow-card">
       <div className="relative h-48">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={activity.image}
+        <SafeImage
+          src={imageSrc}
           alt=""
-          className="h-full w-full object-cover"
+          className="h-48 w-full object-cover rounded-t-lg"
+          fallback={ACTIVITY_FALLBACK_IMAGE}
         />
         <span className="absolute left-4 top-4 rounded-full bg-relief px-3 py-1 text-xs font-semibold text-white">
           {activity.sector}

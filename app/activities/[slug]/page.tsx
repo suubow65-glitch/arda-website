@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { ACTIVITY_FALLBACK_IMAGE } from "@/lib/constants";
+import SafeImage from "@/components/SafeImage";
 import { getActivities, getActivityBySlug } from "@/lib/content";
 
 type Props = { params: { slug: string } };
@@ -20,15 +22,20 @@ export default async function ActivityDetailPage({ params }: Props) {
   if (!activity) notFound();
 
   const meta = [activity.location, activity.beneficiaries].filter(Boolean);
+  const imageSrc =
+    (activity as { imageUrl?: string }).imageUrl ||
+    (activity as { image_url?: string }).image_url ||
+    activity.image ||
+    ACTIVITY_FALLBACK_IMAGE;
 
   return (
     <article>
       <section className="relative h-72 bg-navy">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={activity.image}
+        <SafeImage
+          src={imageSrc}
           alt=""
           className="h-full w-full object-cover opacity-50"
+          fallback={ACTIVITY_FALLBACK_IMAGE}
         />
         <div className="container-arda absolute inset-0 flex flex-col justify-end pb-10 text-white">
           <span className="w-fit rounded-full bg-relief px-3 py-1 text-xs font-semibold">

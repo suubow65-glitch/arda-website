@@ -29,3 +29,6 @@ export const DOCUMENT_CATEGORIES = [
 ] as const;
 
 export const ADMIN_COOKIE = "arda_admin";
+
+export const ACTIVITY_FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&w=1600&q=80";
