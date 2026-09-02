@@ -5,7 +5,6 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { heroSlides } from "@/data/mockData";
-import { createSupabaseClient, isSupabaseConfigured } from "@/lib/supabaseClient";
 import { mapSlide } from "@/lib/mappers";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import SafeImage from "@/components/SafeImage";
@@ -13,6 +12,7 @@ import type { HeroSlide } from "@/data/mockData";
 import type { SlideRow } from "@/lib/types";
 
 const INTERVAL = 7000;
+const API_URL = "/api/admin/slides";
 const customKey = "arda_user_custom_slides_v1";
 
 export default function HeroSlider() {
@@ -79,34 +79,31 @@ export default function HeroSlider() {
   }, [parseRows]);
 
   useEffect(() => {
-    async function loadFromSupabase() {
-      if (!isSupabaseConfigured()) return false;
-      const supabase = createSupabaseClient();
-      if (!supabase) return false;
+    async function loadFromApi(): Promise<SlideRow[] | null> {
       try {
-        const { data, error } = await supabase
-          .from("slides")
-          .select("*")
-          .eq("active", true)
-          .order("order_index", { ascending: true });
-        if (error || !data || data.length === 0) return false;
-        const rows = data as SlideRow[];
-        const active = parseRows(rows);
-        if (!active) return false;
-        setSlides(active);
-        persistRows(rows);
-        return true;
+        const res = await fetch(API_URL, { cache: "no-store" });
+        if (!res.ok) return null;
+        const data = (await res.json()) as { slides?: SlideRow[] };
+        const rows = Array.isArray(data.slides) ? data.slides : null;
+        if (!rows || rows.length === 0) return null;
+        return rows;
       } catch {
-        return false;
+        return null;
       }
     }
 
     async function init() {
-      const synced = await loadFromSupabase();
-      if (!synced) {
-        const cached = loadFromStorage();
-        if (cached) setSlides(cached);
+      const rows = await loadFromApi();
+      if (rows) {
+        const active = parseRows(rows);
+        if (active) {
+          setSlides(active);
+          persistRows(rows);
+          return;
+        }
       }
+      const cached = loadFromStorage();
+      if (cached) setSlides(cached);
     }
 
     init();
@@ -118,15 +115,11 @@ export default function HeroSlider() {
         e.key === "arda_admin_slides_list" ||
         e.key === storageKeys.slides
       ) {
-        const cached = loadFromStorage();
-        if (cached) setSlides(cached);
+        init();
       }
     };
 
-    const onUpdate = () => {
-      const cached = loadFromStorage();
-      if (cached) setSlides(cached);
-    };
+    const onUpdate = () => init();
 
     window.addEventListener("storage", onStorage);
     window.addEventListener("arda-slides-updated", onUpdate);

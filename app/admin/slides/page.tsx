@@ -44,6 +44,10 @@ const empty = {
   active: true,
 };
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 function persistSlides(rows: SlideRow[]) {
   if (typeof window === "undefined") return;
   localStorage.setItem(
@@ -187,17 +191,19 @@ export default function SlidesAdminPage() {
     persistSlides(next);
 
     try {
-      const url = editing
+      const isEditingCloud = editing && isUuid(editing.id);
+      const url = isEditingCloud
         ? `/api/admin/slides/${editing.id}`
         : "/api/admin/slides";
-      const method = editing ? "PATCH" : "POST";
+      const method = isEditingCloud ? "PATCH" : "POST";
       const res = await fetch(url, { method, body: fd });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; slide?: SlideRow };
       if (!res.ok) throw new Error(data.error || "Save failed.");
-      if (!editing && (data as { slide?: SlideRow }).slide) {
-        const created = (data as { slide: SlideRow }).slide;
+      if (data.slide) {
+        const serverSlide = data.slide;
+        const targetId = editing ? editing.id : nextItem.id;
         const withServer = next.map((i) =>
-          i.id === nextItem.id ? { ...created, image_url: imageUrl } : i
+          i.id === targetId ? serverSlide : i
         );
         setItems(withServer);
         persistSlides(withServer);

@@ -41,22 +41,27 @@ function cacheFirst<T>(key: string, fallback: () => T): T {
 }
 
 export async function getPublishedSlides() {
+  // Cloud-first for cross-device sync when Supabase is configured
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("slides")
+          .select("*")
+          .eq("active", true)
+          .order("order_index", { ascending: true });
+        if (!error && data && data.length > 0) {
+          return (data as SlideRow[]).map(mapSlide);
+        }
+      }
+    } catch {
+      // fall through to offline fallback
+    }
+  }
   const cached = getLocalItem<ReturnType<typeof mapSlide>[]>(storageKeys.slides);
   if (cached) return cached;
-  if (!isSupabaseConfigured()) return mockSlides;
-  try {
-    const supabase = createSupabaseClient();
-    if (!supabase) return mockSlides;
-    const { data, error } = await supabase
-      .from("slides")
-      .select("*")
-      .eq("active", true)
-      .order("order_index", { ascending: true });
-    if (error || !data?.length) return mockSlides;
-    return (data as SlideRow[]).map(mapSlide);
-  } catch {
-    return mockSlides;
-  }
+  return mockSlides;
 }
 
 function sortByDateDesc<T extends { date: string }>(list: T[]): T[] {

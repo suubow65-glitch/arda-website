@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, uploadPublicFile } from "@/lib/requireAdmin";
+import { createServiceSupabase } from "@/lib/supabaseAdmin";
 import type { SlideRow } from "@/lib/types";
 
 export async function GET() {
-  const { error, supabase } = await requireAdmin();
-  if (error) return error;
+  const supabase = createServiceSupabase();
   if (!supabase) {
     return NextResponse.json(
       { error: "Supabase is not configured. Add URL and keys to .env.local." },
@@ -15,6 +15,7 @@ export async function GET() {
     const { data, error: queryError } = await supabase
       .from("slides")
       .select("*")
+      .eq("active", true)
       .order("order_index", { ascending: true });
     if (queryError) {
       console.error("slides GET error:", queryError.message);
