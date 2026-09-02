@@ -7,21 +7,29 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { heroSlides } from "@/data/mockData";
 import { createSupabaseClient, isSupabaseConfigured } from "@/lib/supabaseClient";
 import { mapSlide } from "@/lib/mappers";
-import { storageKeys } from "@/lib/storage";
+import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
+import SafeImage from "@/components/SafeImage";
 import type { HeroSlide } from "@/data/mockData";
 import type { SlideRow } from "@/lib/types";
 
 const INTERVAL = 7000;
+const customKey = "arda_user_custom_slides_v1";
 
 export default function HeroSlider() {
   const [slides, setSlides] = useState<HeroSlide[]>(heroSlides);
   const [index, setIndex] = useState(0);
   const slidesRef = useRef<HeroSlide[]>(slides);
-  const hasLocal = useRef(false);
 
   useEffect(() => {
     slidesRef.current = slides;
   }, [slides]);
+
+  const persistRows = useCallback((rows: SlideRow[]) => {
+    const publicSlides = rows.map(mapSlide);
+    setLocalItem(storageKeys.slides, publicSlides);
+    localStorage.setItem("arda_admin_slides_list", JSON.stringify(rows));
+    localStorage.setItem("arda_slides_override", JSON.stringify(rows));
+  }, []);
 
   const parseRows = useCallback((rows: unknown[]): HeroSlide[] | null => {
     const active = rows
@@ -33,11 +41,11 @@ export default function HeroSlider() {
     return active.length > 0 ? active : null;
   }, []);
 
-  const loadFromStorage = useCallback(() => {
-    if (typeof window === "undefined") return false;
+  const loadFromStorage = useCallback((): HeroSlide[] | null => {
+    if (typeof window === "undefined") return null;
 
     try {
-      const customRaw = localStorage.getItem("arda_user_custom_slides_v1");
+      const customRaw = localStorage.getItem(customKey);
       if (customRaw) {
         const custom = JSON.parse(customRaw) as {
           userModified?: boolean;
@@ -49,80 +57,85 @@ export default function HeroSlider() {
           custom.slides.length > 0
         ) {
           const active = parseRows(custom.slides);
-          if (active) {
-            setSlides(active);
-            hasLocal.current = true;
-            return true;
-          }
+          if (active) return active;
         }
       }
     } catch {
-      // Keep fallback
+      // ignore
     }
 
     const raw =
       localStorage.getItem("arda_slides_override") ||
       localStorage.getItem("arda_admin_slides_list") ||
       localStorage.getItem(storageKeys.slides);
-    if (!raw) return false;
+    if (!raw) return null;
     try {
       const parsed = JSON.parse(raw) as unknown[];
-      if (!Array.isArray(parsed) || parsed.length === 0) return false;
-      const active = parseRows(parsed);
-      if (active) {
-        setSlides(active);
-        hasLocal.current = true;
-        return true;
-      }
+      if (!Array.isArray(parsed) || parsed.length === 0) return null;
+      return parseRows(parsed);
     } catch {
-      // Keep fallback
+      return null;
     }
-    return false;
   }, [parseRows]);
 
   useEffect(() => {
-    loadFromStorage();
+    async function loadFromSupabase() {
+      if (!isSupabaseConfigured()) return false;
+      const supabase = createSupabaseClient();
+      if (!supabase) return false;
+      try {
+        const { data, error } = await supabase
+          .from("slides")
+          .select("*")
+          .eq("active", true)
+          .order("order_index", { ascending: true });
+        if (error || !data || data.length === 0) return false;
+        const rows = data as SlideRow[];
+        const active = parseRows(rows);
+        if (!active) return false;
+        setSlides(active);
+        persistRows(rows);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    async function init() {
+      const synced = await loadFromSupabase();
+      if (!synced) {
+        const cached = loadFromStorage();
+        if (cached) setSlides(cached);
+      }
+    }
+
+    init();
 
     const onStorage = (e: StorageEvent) => {
       if (
-        e.key === "arda_user_custom_slides_v1" ||
+        e.key === customKey ||
         e.key === "arda_slides_override" ||
         e.key === "arda_admin_slides_list" ||
         e.key === storageKeys.slides
       ) {
-        loadFromStorage();
+        const cached = loadFromStorage();
+        if (cached) setSlides(cached);
       }
     };
 
-    const onUpdate = () => loadFromStorage();
+    const onUpdate = () => {
+      const cached = loadFromStorage();
+      if (cached) setSlides(cached);
+    };
 
     window.addEventListener("storage", onStorage);
     window.addEventListener("arda-slides-updated", onUpdate);
-
-    if (!hasLocal.current && isSupabaseConfigured()) {
-      const supabase = createSupabaseClient();
-      if (supabase) {
-        (async () => {
-          try {
-            const { data, error } = await supabase
-              .from("slides")
-              .select("*")
-              .eq("active", true)
-              .order("order_index", { ascending: true });
-            if (error || !data || data.length === 0 || hasLocal.current) return;
-            setSlides((data as SlideRow[]).map(mapSlide));
-          } catch {
-            // Keep fallback
-          }
-        })();
-      }
-    }
 
     return () => {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("arda-slides-updated", onUpdate);
     };
-  }, [loadFromStorage]);
+  }, [loadFromStorage, parseRows, persistRows]);
 
   const go = useCallback((direction: number) => {
     setIndex((current) => {
@@ -144,7 +157,7 @@ export default function HeroSlider() {
   if (!slide) return null;
 
   return (
-    <section className="relative h-[78vh] min-h-[520px] overflow-hidden bg-navy">
+    <section className="relative h-[78vh] min-h-[520px] sm:min-h-[600px] overflow-hidden bg-navy">
       <AnimatePresence mode="wait">
         <motion.div
           key={slide.id}
@@ -154,11 +167,10 @@ export default function HeroSlider() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.7, ease: "easeOut" }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <SafeImage
             src={slide.image}
             alt=""
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover object-center"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-navy via-navy/80 to-navy/25" />
         </motion.div>

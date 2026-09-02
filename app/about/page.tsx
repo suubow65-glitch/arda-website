@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import PageHero from "@/components/PageHero";
 import FocusAreasGrid from "@/components/FocusAreasGrid";
+import SafeImage from "@/components/SafeImage";
 import { getAboutContent, getSiteSettings, getTeamMembers } from "@/lib/content";
 
 const valueIcons: Record<string, LucideIcon> = {
@@ -50,7 +51,7 @@ function PersonCard({
     <article className="rounded-2xl bg-navy p-6 text-white">
       <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-action font-display text-xl">
         {image ? (
-          <img
+          <SafeImage
             src={image}
             alt={name}
             className="h-full w-full object-cover"

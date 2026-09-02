@@ -12,6 +12,7 @@ import {
   Twitter,
 } from "lucide-react";
 import { navLinks } from "@/data/mockData";
+import SafeImage from "@/components/SafeImage";
 import { getSiteSettings } from "@/lib/content";
 import { mapSiteSettings } from "@/lib/mappers";
 
@@ -34,8 +35,7 @@ export default function Footer() {
       <div className="container-arda grid gap-10 py-14 md:grid-cols-2 lg:grid-cols-4">
         <div>
           <div className="flex items-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <SafeImage
               src="/logo.png"
               alt="ARDA Logo"
               className="h-12 w-auto object-contain rounded-lg bg-white/90 p-1.5"

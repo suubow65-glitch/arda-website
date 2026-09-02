@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { ACTIVITY_FALLBACK_IMAGE } from "@/lib/constants";
 
 export default function SafeImage({
   src,
   alt,
   className,
-  fallback = "https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&w=1600&q=80",
+  fallback = ACTIVITY_FALLBACK_IMAGE,
 }: {
   src: string;
   alt?: string;

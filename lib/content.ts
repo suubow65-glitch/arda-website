@@ -66,6 +66,24 @@ function sortByDateDesc<T extends { date: string }>(list: T[]): T[] {
 }
 
 export async function getActivities() {
+  // Cloud-first for cross-device sync when Supabase is configured
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("activities")
+          .select("*")
+          .order("date", { ascending: false });
+        if (!error && data && data.length > 0) {
+          return sortByDateDesc((data as ActivityRow[]).map(mapActivity));
+        }
+      }
+    } catch {
+      // fall through to offline fallback
+    }
+  }
+
   const custom = getLocalItem<{ userModified: boolean; activities: ActivityRow[] }>(
     "arda_user_custom_activities_v1"
   );
@@ -74,19 +92,7 @@ export async function getActivities() {
   }
   const cached = getLocalItem<ReturnType<typeof mapActivity>[]>(storageKeys.activities);
   if (cached) return sortByDateDesc(cached);
-  if (!isSupabaseConfigured()) return sortByDateDesc(mockActivities);
-  try {
-    const supabase = createSupabaseClient();
-    if (!supabase) return sortByDateDesc(mockActivities);
-    const { data, error } = await supabase
-      .from("activities")
-      .select("*")
-      .order("date", { ascending: false });
-    if (error || !data?.length) return sortByDateDesc(mockActivities);
-    return sortByDateDesc((data as ActivityRow[]).map(mapActivity));
-  } catch {
-    return sortByDateDesc(mockActivities);
-  }
+  return sortByDateDesc(mockActivities);
 }
 
 export async function getActivityBySlug(slug: string) {

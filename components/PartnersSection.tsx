@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import SafeImage from "@/components/SafeImage";
 import { getPartners } from "@/lib/content";
 import { mapPartner } from "@/lib/mappers";
 
@@ -26,8 +27,7 @@ export default function PartnersSection() {
             rel={partner.websiteUrl ? "noopener noreferrer" : undefined}
             className="flex h-24 items-center justify-center rounded-2xl border border-navy/10 bg-white p-3 transition hover:shadow-sm"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <SafeImage
               src={logo}
               alt={partner.name}
               className="mb-2 h-12 max-w-[150px] object-contain"

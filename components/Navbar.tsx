@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Mail, MapPin, Menu, Phone, X } from "lucide-react";
+import SafeImage from "@/components/SafeImage";
 import { navLinks } from "@/data/mockData";
 import { getSiteSettings } from "@/lib/content";
 
@@ -67,14 +68,10 @@ export default function Navbar() {
       >
         <div className="container-arda flex h-16 items-center justify-between gap-4 lg:h-[4.5rem]">
           <Link href="/" className="flex items-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <SafeImage
               src="/logo.png"
               alt={`${settings?.shortName ?? "ARDA"} logo`}
               className="h-12 w-auto object-contain md:h-14"
-              onError={(event) => {
-                event.currentTarget.src = "/logo.svg";
-              }}
             />
           </Link>
 
