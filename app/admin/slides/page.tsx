@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Eye, EyeOff, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { getLocalItem, storageKeys } from "@/lib/storage";
+import { compressImageFile } from "@/lib/imageCompressor";
 import { heroSlides } from "@/data/mockData";
 import type { SlideRow } from "@/lib/types";
 
@@ -71,6 +72,7 @@ export default function SlidesAdminPage() {
   const [form, setForm] = useState(empty);
   const [preview, setPreview] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const compressedFileRef = useRef<File | null>(null);
 
   async function load() {
     setLoading(true);
@@ -109,12 +111,14 @@ export default function SlidesAdminPage() {
     load();
   }, []);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const compressed = await compressImageFile(file);
+    compressedFileRef.current = compressed;
     const reader = new FileReader();
     reader.onloadend = () => setPreview(reader.result as string);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(compressed);
   }
 
   function startEdit(item: SlideRow) {
@@ -129,6 +133,7 @@ export default function SlidesAdminPage() {
       active: item.active,
     });
     setPreview(item.image_url);
+    compressedFileRef.current = null;
     setOpen(true);
   }
 
@@ -136,6 +141,7 @@ export default function SlidesAdminPage() {
     setEditing(null);
     setForm(empty);
     setPreview("");
+    compressedFileRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
   }
@@ -144,6 +150,7 @@ export default function SlidesAdminPage() {
     setEditing(null);
     setForm(empty);
     setPreview("");
+    compressedFileRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     setOpen(false);
     setError("");
@@ -164,7 +171,7 @@ export default function SlidesAdminPage() {
     fd.set("order_index", String(form.order_index));
     fd.set("active", form.active ? "true" : "false");
 
-    const file = fileRef.current?.files?.[0];
+    const file = compressedFileRef.current || fileRef.current?.files?.[0];
     const imageUrl = preview || (editing ? editing.image_url : "");
     fd.set("image_url", imageUrl);
     if (file) fd.set("image", file);

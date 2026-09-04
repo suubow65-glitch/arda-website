@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, uploadPublicFile } from "@/lib/requireAdmin";
+import { seedTeamRows } from "@/lib/seedData";
 import type { TeamMemberRow } from "@/lib/types";
 
 export async function GET() {
@@ -17,7 +18,18 @@ export async function GET() {
       console.error("team_members GET error:", queryError.message);
       return NextResponse.json({ team: [] });
     }
-    return NextResponse.json({ team: (data ?? []) as TeamMemberRow[] });
+    if (!data || data.length === 0) {
+      const { data: seeded, error: seedError } = await supabase
+        .from("team_members")
+        .insert(seedTeamRows())
+        .select("*")
+        .order("order_index", { ascending: true });
+      if (seedError || !seeded) {
+        return NextResponse.json({ team: [] });
+      }
+      return NextResponse.json({ team: seeded as TeamMemberRow[] });
+    }
+    return NextResponse.json({ team: data as TeamMemberRow[] });
   } catch (err) {
     console.error("team_members GET exception:", err);
     return NextResponse.json({ team: [] });

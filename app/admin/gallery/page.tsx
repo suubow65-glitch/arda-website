@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Image, Loader2, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
+import { compressImageFile } from "@/lib/imageCompressor";
 import type { GalleryPhotoRow } from "@/lib/types";
 
 const categoryOptions = ["WASH", "Health", "Nutrition", "Education", "Protection", "Agriculture", "Peace", "Climate", "General"];
@@ -26,6 +27,7 @@ export default function GalleryAdminPage() {
   const [form, setForm] = useState(empty);
   const [preview, setPreview] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const compressedFileRef = useRef<File | null>(null);
 
   async function load() {
     setLoading(true);
@@ -51,18 +53,21 @@ export default function GalleryAdminPage() {
     load();
   }, []);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const compressed = await compressImageFile(file);
+    compressedFileRef.current = compressed;
     const reader = new FileReader();
     reader.onloadend = () => setPreview(reader.result as string);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(compressed);
   }
 
   function startAdd() {
     setEditing(null);
     setForm(empty);
     setPreview("");
+    compressedFileRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
   }
@@ -77,6 +82,7 @@ export default function GalleryAdminPage() {
       featured: item.featured,
     });
     setPreview(item.image_url);
+    compressedFileRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
   }
@@ -85,6 +91,7 @@ export default function GalleryAdminPage() {
     setEditing(null);
     setForm(empty);
     setPreview("");
+    compressedFileRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     setOpen(false);
     setError("");
@@ -93,6 +100,9 @@ export default function GalleryAdminPage() {
   function persist(list: GalleryPhotoRow[]) {
     setItems(list);
     setLocalItem(storageKeys.galleryPhotos, list);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("arda-gallery-updated"));
+    }
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -101,7 +111,7 @@ export default function GalleryAdminPage() {
     setError("");
     setSuccess("");
 
-    const file = fileRef.current?.files?.[0];
+    const file = compressedFileRef.current || fileRef.current?.files?.[0];
     const imageUrl = preview || (editing ? editing.image_url : "");
     if (!imageUrl) {
       setError("Please upload or provide an image.");
@@ -145,11 +155,10 @@ export default function GalleryAdminPage() {
           : [data.photo!, ...items];
         persist(synced);
       }
-      setSuccess("Photo saved!");
+      setSuccess("Saved Successfully!");
       reset();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Saved locally (cloud unavailable).";
-      setSuccess(message);
+    } catch {
+      setSuccess("Saved Successfully! (stored locally, cloud unavailable)");
       reset();
     } finally {
       setSaving(false);

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, uploadPublicFile } from "@/lib/requireAdmin";
+import { seedPartnerRows } from "@/lib/seedData";
 import type { PartnerRow } from "@/lib/types";
 
 export async function GET() {
@@ -17,7 +18,18 @@ export async function GET() {
       console.error("partners GET error:", queryError.message);
       return NextResponse.json({ partners: [] });
     }
-    return NextResponse.json({ partners: (data ?? []) as PartnerRow[] });
+    if (!data || data.length === 0) {
+      const { data: seeded, error: seedError } = await supabase
+        .from("partners")
+        .insert(seedPartnerRows())
+        .select("*")
+        .order("order_index", { ascending: true });
+      if (seedError || !seeded) {
+        return NextResponse.json({ partners: [] });
+      }
+      return NextResponse.json({ partners: seeded as PartnerRow[] });
+    }
+    return NextResponse.json({ partners: data as PartnerRow[] });
   } catch (err) {
     console.error("partners GET exception:", err);
     return NextResponse.json({ partners: [] });

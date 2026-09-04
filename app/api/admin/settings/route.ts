@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { seedSiteSettingsRow } from "@/lib/seedData";
 import type { SiteSettingsRow } from "@/lib/types";
 
 export async function GET() {
@@ -19,7 +20,18 @@ export async function GET() {
       console.error("site_settings GET error:", queryError.message);
       return NextResponse.json({ settings: null });
     }
-    return NextResponse.json({ settings: data as SiteSettingsRow | null });
+    if (!data) {
+      const { data: seeded, error: seedError } = await supabase
+        .from("site_settings")
+        .insert(seedSiteSettingsRow())
+        .select("*")
+        .single();
+      if (seedError || !seeded) {
+        return NextResponse.json({ settings: null });
+      }
+      return NextResponse.json({ settings: seeded as SiteSettingsRow });
+    }
+    return NextResponse.json({ settings: data as SiteSettingsRow });
   } catch (err) {
     console.error("site_settings GET exception:", err);
     return NextResponse.json({ settings: null });

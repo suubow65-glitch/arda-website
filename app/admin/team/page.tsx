@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import { mapTeamMember } from "@/lib/mappers";
+import { compressImageFile } from "@/lib/imageCompressor";
 import type { TeamMemberRow } from "@/lib/types";
 
 const empty = {
@@ -15,6 +16,15 @@ const empty = {
 };
 
 const adminKey = "arda_admin_team_list";
+const customKey = "arda_user_custom_team_v1";
+
+function persistAll(rows: TeamMemberRow[]) {
+  if (typeof window === "undefined") return;
+  setLocalItem(adminKey, rows);
+  setLocalItem(customKey, { userModified: true, team: rows });
+  setLocalItem(storageKeys.team, rows.map(mapTeamMember));
+  window.dispatchEvent(new Event("arda-team-updated"));
+}
 
 export default function TeamAdminPage() {
   const [items, setItems] = useState<TeamMemberRow[]>([]);
@@ -24,28 +34,31 @@ export default function TeamAdminPage() {
   const [success, setSuccess] = useState("");
   const [editing, setEditing] = useState<Partial<TeamMemberRow>>(empty);
   const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const compressedFileRef = useRef<File | null>(null);
 
   async function load() {
     setLoading(true);
-    const saved = getLocalItem<TeamMemberRow[]>(adminKey);
-    if (saved) {
-      setItems(saved);
-      setLoading(false);
-      return;
-    }
     try {
       const res = await fetch("/api/admin/team");
-      if (!res.ok) throw new Error("Failed to load team members.");
-      const data = (await res.json()) as { team: TeamMemberRow[] };
-      setItems(data.team);
-      setLocalItem(adminKey, data.team);
-      setLocalItem(storageKeys.team, data.team.map(mapTeamMember));
+      if (res.ok) {
+        const data = (await res.json()) as { team: TeamMemberRow[] };
+        const list = data.team.length ? data.team : getLocalItem<TeamMemberRow[]>(adminKey) || [];
+        setItems(list);
+        persistAll(list);
+        setLoading(false);
+        return;
+      }
     } catch {
-      // keep local state/empty
-    } finally {
-      setLoading(false);
+      // ignore
     }
+    const saved =
+      getLocalItem<TeamMemberRow[]>(adminKey) ||
+      getLocalItem<{ userModified: boolean; team: TeamMemberRow[] }>(customKey)?.team ||
+      [];
+    setItems(saved);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -54,14 +67,28 @@ export default function TeamAdminPage() {
 
   function startAdd() {
     setEditing({ ...empty });
+    setPreview("");
+    compressedFileRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
   }
 
   function startEdit(item: TeamMemberRow) {
     setEditing(item);
+    setPreview(item.image_url || "");
+    compressedFileRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const compressed = await compressImageFile(file);
+    compressedFileRef.current = compressed;
+    const reader = new FileReader();
+    reader.onloadend = () => setPreview(reader.result as string);
+    reader.readAsDataURL(compressed);
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -76,32 +103,51 @@ export default function TeamAdminPage() {
     fd.set("category", editing.category ?? "executive");
     fd.set("bio", editing.bio ?? "");
     fd.set("order_index", String(editing.order_index ?? 0));
-    const file = fileRef.current?.files?.[0];
+    const file = compressedFileRef.current || fileRef.current?.files?.[0];
     if (file) fd.set("image", file);
 
+    const imageUrl = preview || (editing.id ? editing.image_url || "" : "");
+    const tempId = editing.id || String(Date.now());
+    const nextItem: TeamMemberRow = editing.id
+      ? ({ ...(items.find((i) => i.id === editing.id) as TeamMemberRow), ...editing, image_url: imageUrl } as TeamMemberRow)
+      : ({ ...empty, ...editing, id: tempId, image_url: imageUrl, created_at: new Date().toISOString() } as TeamMemberRow);
+
     const next = editing.id
-      ? items.map((i) =>
-          i.id === editing.id ? ({ ...i, ...editing } as TeamMemberRow) : i
-        )
-      : [...items, { ...editing, id: String(Date.now()) } as TeamMemberRow];
+      ? items.map((i) => (i.id === editing.id ? nextItem : i))
+      : [...items, nextItem];
     setItems(next);
-    setLocalItem(adminKey, next);
-    setLocalItem(storageKeys.team, next.map(mapTeamMember));
+    persistAll(next);
 
     try {
-      const url = editing.id
-        ? `/api/admin/team/${editing.id}`
-        : "/api/admin/team";
+      const url = editing.id ? `/api/admin/team/${editing.id}` : "/api/admin/team";
       const method = editing.id ? "PATCH" : "POST";
       const res = await fetch(url, { method, body: fd });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; member?: TeamMemberRow };
       if (!res.ok) throw new Error(data.error || "Save failed.");
+      if (data.member) {
+        const serverMember: TeamMemberRow = {
+          ...data.member,
+          image_url: data.member.image_url || imageUrl,
+        };
+        const synced = editing.id
+          ? items.map((i) => (i.id === editing.id ? serverMember : i))
+          : [...items, serverMember];
+        setItems(synced);
+        persistAll(synced);
+      }
       setOpen(false);
       setEditing(empty);
+      setPreview("");
+      compressedFileRef.current = null;
       if (fileRef.current) fileRef.current.value = "";
-      await load();
-    } catch {
       setSuccess("Saved Successfully!");
+    } catch {
+      setOpen(false);
+      setEditing(empty);
+      setPreview("");
+      compressedFileRef.current = null;
+      if (fileRef.current) fileRef.current.value = "";
+      setSuccess("Saved Successfully! (stored locally, cloud unavailable)");
     } finally {
       setSaving(false);
     }
@@ -113,15 +159,14 @@ export default function TeamAdminPage() {
     setSuccess("");
     const next = items.filter((i) => i.id !== id);
     setItems(next);
-    setLocalItem(adminKey, next);
-    setLocalItem(storageKeys.team, next.map(mapTeamMember));
+    persistAll(next);
     try {
       const res = await fetch(`/api/admin/team/${id}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
-      await load();
-    } catch {
       setSuccess("Saved Successfully!");
+    } catch {
+      setSuccess("Saved Successfully! (removed locally)");
     }
   }
 
@@ -221,10 +266,18 @@ export default function TeamAdminPage() {
               ref={fileRef}
               type="file"
               accept="image/*"
+              onChange={handleFileChange}
               required={!editing.id}
               className="mt-1 w-full rounded-md border border-navy/15 bg-surface px-3 py-2.5 text-sm file:mr-3 file:rounded file:border-0 file:bg-action file:px-3 file:py-1 file:text-white"
             />
-            {editing.id && (
+            {preview && (
+              <img
+                src={preview}
+                alt="Photo preview"
+                className="mt-3 h-20 w-20 rounded-full border border-navy/10 object-cover"
+              />
+            )}
+            {editing.id && !preview && (
               <p className="mt-1 text-xs text-navy/60">
                 Leave empty to keep the existing photo.
               </p>
@@ -236,7 +289,7 @@ export default function TeamAdminPage() {
             </button>
             <button
               type="button"
-              onClick={() => { setOpen(false); setEditing(empty); if (fileRef.current) fileRef.current.value = ""; }}
+              onClick={() => { setOpen(false); setEditing(empty); setPreview(""); compressedFileRef.current = null; if (fileRef.current) fileRef.current.value = ""; }}
               className="rounded-md border border-navy/15 px-4 py-2.5 text-sm font-semibold text-navy hover:bg-surface"
             >
               Cancel

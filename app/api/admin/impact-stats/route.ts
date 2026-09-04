@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { impactStats } from "@/data/mockData";
+import { seedImpactStatRows } from "@/lib/seedData";
 import type { ImpactStatRow } from "@/lib/types";
 
 export async function GET() {
@@ -18,7 +19,18 @@ export async function GET() {
       console.error("impact_stats GET error:", queryError.message);
       return NextResponse.json({ stats: impactStats });
     }
-    return NextResponse.json({ stats: (data ?? []) as ImpactStatRow[] });
+    if (!data || data.length === 0) {
+      const { data: seeded, error: seedError } = await supabase
+        .from("impact_stats")
+        .insert(seedImpactStatRows())
+        .select("*")
+        .order("order_index", { ascending: true });
+      if (seedError || !seeded) {
+        return NextResponse.json({ stats: impactStats });
+      }
+      return NextResponse.json({ stats: seeded as ImpactStatRow[] });
+    }
+    return NextResponse.json({ stats: data as ImpactStatRow[] });
   } catch (err) {
     console.error("impact_stats GET exception:", err);
     return NextResponse.json({ stats: impactStats });

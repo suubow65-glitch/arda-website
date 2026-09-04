@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { seedAboutContentRow } from "@/lib/seedData";
 import type { AboutContentRow } from "@/lib/types";
 
 export async function GET() {
@@ -19,7 +20,18 @@ export async function GET() {
       console.error("about_content GET error:", queryError.message);
       return NextResponse.json({ about: null });
     }
-    return NextResponse.json({ about: data as AboutContentRow | null });
+    if (!data) {
+      const { data: seeded, error: seedError } = await supabase
+        .from("about_content")
+        .insert(seedAboutContentRow())
+        .select("*")
+        .single();
+      if (seedError || !seeded) {
+        return NextResponse.json({ about: null });
+      }
+      return NextResponse.json({ about: seeded as AboutContentRow });
+    }
+    return NextResponse.json({ about: data as AboutContentRow });
   } catch (err) {
     console.error("about_content GET exception:", err);
     return NextResponse.json({ about: null });

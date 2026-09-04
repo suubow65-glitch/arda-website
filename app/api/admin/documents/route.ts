@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { formatBytes } from "@/lib/mappers";
 import { requireAdmin, uploadPublicFile } from "@/lib/requireAdmin";
+import { seedDocumentRows } from "@/lib/seedData";
 import type { DocumentRow } from "@/lib/types";
 
 export async function GET() {
@@ -21,7 +22,18 @@ export async function GET() {
       console.error("documents GET error:", queryError.message);
       return NextResponse.json({ documents: [] });
     }
-    return NextResponse.json({ documents: (data ?? []) as DocumentRow[] });
+    if (!data || data.length === 0) {
+      const { data: seeded, error: seedError } = await supabase
+        .from("documents")
+        .insert(seedDocumentRows())
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (seedError || !seeded) {
+        return NextResponse.json({ documents: [] });
+      }
+      return NextResponse.json({ documents: seeded as DocumentRow[] });
+    }
+    return NextResponse.json({ documents: data as DocumentRow[] });
   } catch (err) {
     console.error("documents GET exception:", err);
     return NextResponse.json({ documents: [] });

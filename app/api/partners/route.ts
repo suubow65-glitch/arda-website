@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceSupabase } from "@/lib/supabaseAdmin";
 import { createSupabaseClient, isSupabaseConfigured } from "@/lib/supabaseClient";
+import { seedPartnerRows } from "@/lib/seedData";
 import type { PartnerRow } from "@/lib/types";
 
 // Public, unauthenticated endpoint so ANY device (desktop, mobile, tablet)
@@ -20,9 +21,23 @@ export async function GET() {
       .from("partners")
       .select("*")
       .order("order_index", { ascending: true });
-    if (error || !data) {
-      console.error("public partners GET error:", error?.message);
+    if (error) {
+      console.error("public partners GET error:", error.message);
       return NextResponse.json({ partners: [] });
+    }
+    if (!data || data.length === 0) {
+      // Auto-seed the cloud database with official ARDA partners so the
+      // table (and public site) is never empty.
+      const { data: seeded, error: seedError } = await supabase
+        .from("partners")
+        .insert(seedPartnerRows())
+        .select("*")
+        .order("order_index", { ascending: true });
+      if (seedError || !seeded) {
+        console.error("public partners seed error:", seedError?.message);
+        return NextResponse.json({ partners: [] });
+      }
+      return NextResponse.json({ partners: seeded as PartnerRow[] });
     }
     return NextResponse.json({ partners: data as PartnerRow[] });
   } catch (err) {

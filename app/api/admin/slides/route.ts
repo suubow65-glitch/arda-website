@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, uploadPublicFile } from "@/lib/requireAdmin";
 import { createServiceSupabase } from "@/lib/supabaseAdmin";
+import { seedSlideRows } from "@/lib/seedData";
 import type { SlideRow } from "@/lib/types";
 
 export async function GET() {
@@ -20,6 +21,23 @@ export async function GET() {
     if (queryError) {
       console.error("slides GET error:", queryError.message);
       return NextResponse.json({ slides: [] });
+    }
+    if (!data || data.length === 0) {
+      // Check if the table is truly empty (not just filtered by active=true)
+      const { count } = await supabase
+        .from("slides")
+        .select("id", { count: "exact", head: true });
+      if (!count) {
+        const { data: seeded, error: seedError } = await supabase
+          .from("slides")
+          .insert(seedSlideRows())
+          .select("*")
+          .order("order_index", { ascending: true });
+        if (seedError || !seeded) {
+          return NextResponse.json({ slides: [] });
+        }
+        return NextResponse.json({ slides: seeded as SlideRow[] });
+      }
     }
     return NextResponse.json({ slides: (data ?? []) as SlideRow[] });
   } catch (err) {

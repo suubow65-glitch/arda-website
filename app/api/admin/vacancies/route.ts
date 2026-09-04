@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, uploadPublicFile } from "@/lib/requireAdmin";
+import { seedVacancyRows } from "@/lib/seedData";
 import type { VacancyRow } from "@/lib/types";
 
 export async function GET() {
@@ -17,7 +18,18 @@ export async function GET() {
       console.error("vacancies GET error:", queryError.message);
       return NextResponse.json({ vacancies: [] });
     }
-    return NextResponse.json({ vacancies: (data ?? []) as VacancyRow[] });
+    if (!data || data.length === 0) {
+      const { data: seeded, error: seedError } = await supabase
+        .from("vacancies")
+        .insert(seedVacancyRows())
+        .select("*")
+        .order("order_index", { ascending: true });
+      if (seedError || !seeded) {
+        return NextResponse.json({ vacancies: [] });
+      }
+      return NextResponse.json({ vacancies: seeded as VacancyRow[] });
+    }
+    return NextResponse.json({ vacancies: data as VacancyRow[] });
   } catch (err) {
     console.error("vacancies GET exception:", err);
     return NextResponse.json({ vacancies: [] });

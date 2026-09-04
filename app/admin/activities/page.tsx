@@ -10,6 +10,7 @@ import {
 } from "@/lib/constants";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import { mapActivity, slugify } from "@/lib/mappers";
+import { compressImageFile } from "@/lib/imageCompressor";
 import { activities as mockActivities } from "@/data/mockData";
 import type { ActivityRow } from "@/lib/types";
 
@@ -56,6 +57,9 @@ function persistActivities(rows: ActivityRow[]) {
     localStorage.setItem(adminKey, JSON.stringify(ordered));
   }
   setLocalItem(storageKeys.activities, ordered.map(mapActivity));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("arda-activities-updated"));
+  }
 }
 
 export default function ActivitiesAdminPage() {
@@ -69,6 +73,7 @@ export default function ActivitiesAdminPage() {
   const [form, setForm] = useState(empty);
   const [preview, setPreview] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const compressedFileRef = useRef<File | null>(null);
 
   const displayed = useMemo(() => sortByDateDesc(items), [items]);
 
@@ -110,12 +115,14 @@ export default function ActivitiesAdminPage() {
     load();
   }, []);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const compressed = await compressImageFile(file);
+    compressedFileRef.current = compressed;
     const reader = new FileReader();
     reader.onloadend = () => setPreview(reader.result as string);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(compressed);
   }
 
   function startEdit(item: ActivityRow) {
@@ -130,6 +137,7 @@ export default function ActivitiesAdminPage() {
       status: (item.status === "Completed" ? "Completed" : "Ongoing") as typeof empty.status,
     });
     setPreview(item.image_url);
+    compressedFileRef.current = null;
     setOpen(true);
   }
 
@@ -137,6 +145,7 @@ export default function ActivitiesAdminPage() {
     setEditing(null);
     setForm(empty);
     setPreview("");
+    compressedFileRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
   }
@@ -145,6 +154,7 @@ export default function ActivitiesAdminPage() {
     setEditing(null);
     setForm(empty);
     setPreview("");
+    compressedFileRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     setOpen(false);
     setError("");
@@ -165,7 +175,7 @@ export default function ActivitiesAdminPage() {
     fd.set("content", form.content || form.description);
     fd.set("status", form.status);
 
-    const file = fileRef.current?.files?.[0];
+    const file = compressedFileRef.current || fileRef.current?.files?.[0];
     const imageUrl = preview || (editing ? editing.image_url : "");
     if (file) fd.set("image", file);
     if (editing && !file) fd.set("image_url", imageUrl);
@@ -205,6 +215,7 @@ export default function ActivitiesAdminPage() {
       if (!res.ok) throw new Error(data.error || "Save failed.");
       await load();
       reset();
+      setSuccess("Saved Successfully!");
     } catch {
       setSuccess("Saved Successfully!");
       reset();

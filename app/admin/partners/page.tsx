@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import { mapPartner } from "@/lib/mappers";
+import { compressImageFile } from "@/lib/imageCompressor";
 import { partners as mockPartners } from "@/data/mockData";
 import type { PartnerRow } from "@/lib/types";
 
@@ -40,6 +41,7 @@ export default function PartnersAdminPage() {
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const compressedFileRef = useRef<File | null>(null);
 
   async function load() {
     setLoading(true);
@@ -72,6 +74,7 @@ export default function PartnersAdminPage() {
   function startAdd() {
     setEditing({ ...empty });
     setPreview("");
+    compressedFileRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
   }
@@ -79,16 +82,19 @@ export default function PartnersAdminPage() {
   function startEdit(item: PartnerRow) {
     setEditing(item);
     setPreview(item.logo_url || "");
+    compressedFileRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const compressed = await compressImageFile(file);
+    compressedFileRef.current = compressed;
     const reader = new FileReader();
     reader.onloadend = () => setPreview(reader.result as string);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(compressed);
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -102,7 +108,7 @@ export default function PartnersAdminPage() {
     fd.set("initials", editing.initials ?? "");
     fd.set("website_url", editing.website_url ?? "");
     fd.set("order_index", String(editing.order_index ?? 0));
-    const file = fileRef.current?.files?.[0];
+    const file = compressedFileRef.current || fileRef.current?.files?.[0];
     if (file) fd.set("logo", file);
 
     // Use the Base64 preview (or existing logo) as the immediate local logo URL
@@ -140,14 +146,16 @@ export default function PartnersAdminPage() {
       setOpen(false);
       setEditing(empty);
       setPreview("");
+      compressedFileRef.current = null;
       if (fileRef.current) fileRef.current.value = "";
-      setSuccess("Partner Saved Successfully!");
+      setSuccess("Saved Successfully!");
     } catch {
       setOpen(false);
       setEditing(empty);
       setPreview("");
+      compressedFileRef.current = null;
       if (fileRef.current) fileRef.current.value = "";
-      setSuccess("Partner Saved Successfully! (stored locally, cloud unavailable)");
+      setSuccess("Saved Successfully! (stored locally, cloud unavailable)");
     } finally {
       setSaving(false);
     }
@@ -267,7 +275,7 @@ export default function PartnersAdminPage() {
             </button>
             <button
               type="button"
-              onClick={() => { setOpen(false); setEditing(empty); setPreview(""); if (fileRef.current) fileRef.current.value = ""; }}
+              onClick={() => { setOpen(false); setEditing(empty); setPreview(""); compressedFileRef.current = null; if (fileRef.current) fileRef.current.value = ""; }}
               className="rounded-md border border-navy/15 px-4 py-2.5 text-sm font-semibold text-navy hover:bg-surface"
             >
               Cancel
