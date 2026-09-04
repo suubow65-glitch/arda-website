@@ -49,7 +49,7 @@ export default function PartnersSection() {
             <SafeImage
               src={logo}
               alt={partner.name}
-              className="mb-2 h-12 max-w-[160px] object-contain"
+              className="h-12 max-w-[150px] object-contain mb-2"
             />
           </a>
         ) : (

@@ -27,9 +27,23 @@ export async function uploadPublicFile(
   const buffer = Buffer.from(await file.arrayBuffer());
   const { error } = await supabase.storage.from(bucket).upload(path, buffer, {
     contentType: file.type || "application/octet-stream",
-    upsert: false,
+    cacheControl: "3600",
+    upsert: true,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Auto-provision the bucket if it doesn't exist yet, then retry once.
+    if (/bucket.*not.*found/i.test(error.message)) {
+      await supabase.storage.createBucket(bucket, { public: true });
+      const retry = await supabase.storage.from(bucket).upload(path, buffer, {
+        contentType: file.type || "application/octet-stream",
+        cacheControl: "3600",
+        upsert: true,
+      });
+      if (retry.error) throw new Error(retry.error.message);
+    } else {
+      throw new Error(error.message);
+    }
+  }
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
   return data.publicUrl;
 }

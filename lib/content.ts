@@ -223,6 +223,26 @@ export async function getPartners() {
     websiteUrl: p.websiteUrl || "",
     orderIndex: i,
   }));
+
+  // 1) Public, unauthenticated cloud API — works identically on every
+  // device (desktop, mobile, tablet) since it always hits Supabase Cloud.
+  if (typeof window !== "undefined") {
+    try {
+      const res = await fetch("/api/partners", { cache: "no-store" });
+      if (res.ok) {
+        const data = (await res.json()) as { partners?: PartnerRow[] };
+        if (data.partners && data.partners.length > 0) {
+          const mapped = data.partners.map(mapPartner);
+          setLocalItem(storageKeys.partners, mapped);
+          return mapped;
+        }
+      }
+    } catch {
+      // fall through to direct client / local fallback
+    }
+  }
+
+  // 2) Direct Supabase client (works for server components too).
   if (isSupabaseConfigured()) {
     try {
       const supabase = createSupabaseClient();
@@ -241,14 +261,20 @@ export async function getPartners() {
       // fall through
     }
   }
+
+  // 3) Locally persisted custom partners (admin edits made while offline).
   const custom = getLocalItem<{ userModified: boolean; partners: PartnerRow[] }>(
     "arda_user_custom_partners_v1"
   );
   if (custom?.userModified && custom.partners?.length) {
     return custom.partners.map(mapPartner);
   }
+
+  // 4) Cached copy of the last successful cloud fetch.
   const cached = getLocalItem<ReturnType<typeof mapPartner>[]>(storageKeys.partners);
   if (cached) return cached;
+
+  // 5) Static seed data as a last resort.
   return fallback;
 }
 
