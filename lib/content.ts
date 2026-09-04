@@ -3,6 +3,7 @@ import {
   boardMembers,
   coreValues,
   documents as mockDocuments,
+  focusAreas,
   heroSlides as mockSlides,
   impactStats,
   leadership,
@@ -13,21 +14,29 @@ import { createSupabaseClient, isSupabaseConfigured } from "@/lib/supabaseClient
 import {
   mapAboutContent,
   mapActivity,
+  mapAlertBanner,
   mapDocument,
+  mapGalleryPhoto,
   mapImpactStat,
+  mapPageHeader,
   mapPartner,
+  mapPillar,
   mapSiteSettings,
   mapSlide,
   mapTeamMember,
   mapVacancy,
 } from "@/lib/mappers";
-import { getLocalItem, storageKeys } from "@/lib/storage";
+import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import type {
   AboutContentRow,
   ActivityRow,
+  AlertBannerRow,
   DocumentRow,
+  GalleryPhotoRow,
   ImpactStatRow,
+  PageHeaderRow,
   PartnerRow,
+  PillarRow,
   SiteSettingsRow,
   SlideRow,
   TeamMemberRow,
@@ -189,8 +198,7 @@ export async function getImpactStats() {
 }
 
 export async function getPartners() {
-  const cached = getLocalItem<ReturnType<typeof mapPartner>[]>(storageKeys.partners);
-  if (cached) return cached;
+  // Cloud-first for cross-device logo sync
   const fallback = mockPartners.map((p, i) => ({
     id: p.name,
     name: p.name,
@@ -199,19 +207,27 @@ export async function getPartners() {
     websiteUrl: p.websiteUrl || "",
     orderIndex: i,
   }));
-  if (!isSupabaseConfigured()) return fallback;
-  try {
-    const supabase = createSupabaseClient();
-    if (!supabase) return fallback;
-    const { data, error } = await supabase
-      .from("partners")
-      .select("*")
-      .order("order_index", { ascending: true });
-    if (error || !data?.length) return fallback;
-    return (data as PartnerRow[]).map(mapPartner);
-  } catch {
-    return fallback;
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("partners")
+          .select("*")
+          .order("order_index", { ascending: true });
+        if (!error && data && data.length > 0) {
+          const mapped = (data as PartnerRow[]).map(mapPartner);
+          setLocalItem(storageKeys.partners, mapped);
+          return mapped;
+        }
+      }
+    } catch {
+      // fall through
+    }
   }
+  const cached = getLocalItem<ReturnType<typeof mapPartner>[]>(storageKeys.partners);
+  if (cached) return cached;
+  return fallback;
 }
 
 export async function getTeamMembers() {
@@ -283,6 +299,136 @@ export async function getVacancies() {
   } catch {
     return fallback;
   }
+}
+
+export async function getAlertBanner() {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("alert_banner")
+          .select("*")
+          .eq("active", true)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!error && data) return mapAlertBanner(data as AlertBannerRow);
+      }
+    } catch {
+      // fall through
+    }
+  }
+  const cached = getLocalItem<ReturnType<typeof mapAlertBanner>>(storageKeys.alertBanner);
+  if (cached) return cached;
+  return null;
+}
+
+export async function getPageHeader(
+  pageKey: string,
+  sectionKey: string,
+  fallback?: { kicker?: string; title?: string; description?: string }
+) {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("page_headers")
+          .select("*")
+          .eq("page_key", pageKey)
+          .eq("section_key", sectionKey)
+          .maybeSingle();
+        if (!error && data) {
+          const mapped = mapPageHeader(data as PageHeaderRow);
+          return {
+            kicker: mapped.subtitle || fallback?.kicker || "",
+            title: mapped.title,
+            description: mapped.description || fallback?.description || "",
+          };
+        }
+      }
+    } catch {
+      // fall through
+    }
+  }
+  const cached = getLocalItem<ReturnType<typeof mapPageHeader>[]>(storageKeys.pageHeaders);
+  const match = cached?.find(
+    (h) => h.pageKey === pageKey && h.sectionKey === sectionKey
+  );
+  if (match) {
+    return {
+      kicker: match.subtitle || fallback?.kicker || "",
+      title: match.title,
+      description: match.description || fallback?.description || "",
+    };
+  }
+  return {
+    kicker: fallback?.kicker || "",
+    title: fallback?.title || "",
+    description: fallback?.description || "",
+  };
+}
+
+export async function getPillars() {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("pillars")
+          .select("*")
+          .eq("active", true)
+          .order("order_index", { ascending: true });
+        if (!error && data && data.length > 0) {
+          return (data as PillarRow[]).map(mapPillar);
+        }
+      }
+    } catch {
+      // fall through
+    }
+  }
+  const cached = getLocalItem<ReturnType<typeof mapPillar>[]>(storageKeys.pillars);
+  if (cached) return cached;
+  return focusAreas.map((area) => ({
+    id: area.slug,
+    slug: area.slug,
+    title: area.title,
+    shortTitle: area.shortTitle,
+    shortDesc: area.description,
+    description: area.description,
+    longDescription: area.longDescription,
+    interventions: area.interventions,
+    icon: String(area.icon),
+    orderIndex: 0,
+    active: true,
+  })) as ReturnType<typeof mapPillar>[];
+}
+
+export async function getGalleryPhotos(featuredOnly = false) {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        let query = supabase
+          .from("gallery_photos")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (featuredOnly) query = query.eq("featured", true);
+        const { data, error } = await query;
+        if (!error && data) {
+          return (data as GalleryPhotoRow[]).map(mapGalleryPhoto);
+        }
+      }
+    } catch {
+      // fall through
+    }
+  }
+  const cached = getLocalItem<ReturnType<typeof mapGalleryPhoto>[]>(
+    storageKeys.galleryPhotos
+  );
+  if (cached) return cached;
+  return [];
 }
 
 export async function submitContactMessage(input: {

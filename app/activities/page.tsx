@@ -19,6 +19,8 @@ export default function ActivitiesPage() {
         kicker="Field programmes"
         title="Projects & Activities"
         description="Filter ARDA projects by sector and region — from EPI/PHC and nutrition in Southwest State to agriculture and livestock in Baidoa."
+        pageKey="activities"
+        sectionKey="hero"
       />
       <section className="py-16">
         <div className="container-arda">

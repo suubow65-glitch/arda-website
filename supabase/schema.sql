@@ -296,3 +296,101 @@ create policy "Public read vacancy-files"
   on storage.objects for select
   to anon, authenticated
   using (bucket_id = 'vacancy-files');
+
+-- Emergency alert banner
+
+create table if not exists public.alert_banner (
+  id uuid primary key default gen_random_uuid(),
+  message text not null default '',
+  button_text text,
+  button_url text,
+  active boolean not null default false,
+  bg_color text not null default '#C60C30',
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+alter table public.alert_banner enable row level security;
+
+drop policy if exists "Public can read alert_banner" on public.alert_banner;
+create policy "Public can read alert_banner"
+  on public.alert_banner for select
+  to anon, authenticated
+  using (active = true);
+
+-- Page section titles and subheadings
+
+create table if not exists public.page_headers (
+  id uuid primary key default gen_random_uuid(),
+  page_key text not null,
+  section_key text not null,
+  title text not null default '',
+  subtitle text,
+  description text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique (page_key, section_key)
+);
+
+alter table public.page_headers enable row level security;
+
+drop policy if exists "Public can read page_headers" on public.page_headers;
+create policy "Public can read page_headers"
+  on public.page_headers for select
+  to anon, authenticated
+  using (true);
+
+-- Programmatic pillars / focus areas
+
+create table if not exists public.pillars (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  category_slug text not null,
+  icon_name text not null,
+  short_desc text not null,
+  full_content text not null,
+  interventions text[] not null default '{}',
+  order_index int not null default 0,
+  active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+alter table public.pillars enable row level security;
+
+drop policy if exists "Public can read pillars" on public.pillars;
+create policy "Public can read pillars"
+  on public.pillars for select
+  to anon, authenticated
+  using (active = true);
+
+-- Field photo gallery
+
+create table if not exists public.gallery_photos (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  location text,
+  category text,
+  image_url text not null,
+  date text,
+  featured boolean not null default false,
+  created_at timestamp with time zone not null default now()
+);
+
+alter table public.gallery_photos enable row level security;
+
+drop policy if exists "Public can read gallery_photos" on public.gallery_photos;
+create policy "Public can read gallery_photos"
+  on public.gallery_photos for select
+  to anon, authenticated
+  using (true);
+
+insert into storage.buckets (id, name, public)
+values ('gallery-photos', 'gallery-photos', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "Public read gallery-photos" on storage.objects;
+create policy "Public read gallery-photos"
+  on storage.objects for select
+  to anon, authenticated
+  using (bucket_id = 'gallery-photos');

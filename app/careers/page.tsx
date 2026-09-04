@@ -24,6 +24,8 @@ export default function CareersPage() {
         kicker="Work with us"
         title="Careers & Tenders"
         description="Join ARDA in delivering relief and development programmes across Somalia, or respond to our open procurement opportunities."
+        pageKey="careers"
+        sectionKey="hero"
       />
 
       <section className="py-16">

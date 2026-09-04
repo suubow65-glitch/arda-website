@@ -8,33 +8,75 @@ import {
   FileText,
   FolderOpen,
   Globe,
-  Images,
+  Image,
   Inbox,
   LayoutDashboard,
   LogOut,
+  Megaphone,
   Menu,
   Settings,
   Shield,
   Target,
+  Type,
   Users,
   X,
 } from "lucide-react";
 import { useState } from "react";
 
-const links = [
-  { href: "/admin", label: "Overview", icon: LayoutDashboard },
-  { href: "/admin/slides", label: "Slideshows", icon: Images },
-  { href: "/admin/activities", label: "Activities", icon: FolderOpen },
-  { href: "/admin/documents", label: "Documents", icon: FileText },
-  { href: "/admin/about", label: "Vision & Mission", icon: BookOpen },
-  { href: "/admin/team", label: "Team & Board", icon: Users },
-  { href: "/admin/vacancies", label: "Jobs & Tenders", icon: Briefcase },
-  { href: "/admin/partners", label: "Partners", icon: Globe },
-  { href: "/admin/stats", label: "Impact Stats", icon: Target },
-  { href: "/admin/settings", label: "Site Settings", icon: Settings },
-  { href: "/admin/security", label: "Security", icon: Shield },
-  { href: "/admin/messages", label: "Contact Messages", icon: Inbox },
+type NavLink = { href: string; label: string; icon: React.ElementType };
+type Section = { title: string; links: NavLink[] };
+
+const sections: Section[] = [
+  {
+    title: "Dashboard",
+    links: [{ href: "/admin", label: "Overview", icon: LayoutDashboard }],
+  },
+  {
+    title: "Hero & Notices",
+    links: [
+      { href: "/admin/alert-banner", label: "Alert Banner", icon: Megaphone },
+      { href: "/admin/slides", label: "Hero Slideshows", icon: Image },
+    ],
+  },
+  {
+    title: "Programs & Field Work",
+    links: [
+      { href: "/admin/pillars", label: "Focus Pillars", icon: Target },
+      { href: "/admin/activities", label: "Field Activities", icon: FolderOpen },
+      { href: "/admin/gallery", label: "Photo Gallery", icon: Image },
+    ],
+  },
+  {
+    title: "Publications & Jobs",
+    links: [
+      { href: "/admin/documents", label: "PDF Documents", icon: FileText },
+      { href: "/admin/vacancies", label: "Jobs & Tenders", icon: Briefcase },
+    ],
+  },
+  {
+    title: "NGO Profile",
+    links: [
+      { href: "/admin/about", label: "Vision & Mission", icon: BookOpen },
+      { href: "/admin/team", label: "Team & Board", icon: Users },
+      { href: "/admin/partners", label: "Partners & Donors", icon: Globe },
+      { href: "/admin/stats", label: "Impact Stats", icon: Target },
+    ],
+  },
+  {
+    title: "Settings & Security",
+    links: [
+      { href: "/admin/pages", label: "Page Headings", icon: Type },
+      { href: "/admin/settings", label: "Site Settings", icon: Settings },
+      { href: "/admin/security", label: "Admin Security", icon: Shield },
+      { href: "/admin/messages", label: "Contact Messages", icon: Inbox },
+    ],
+  },
 ];
+
+function isActive(pathname: string, href: string) {
+  if (href === "/admin") return pathname === "/admin";
+  return pathname.startsWith(href);
+}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -71,31 +113,39 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <X className="h-5 w-5" />
           </button>
         </div>
-        <nav className="flex flex-col gap-1 p-3">
-          {links.map((link) => {
-            const active =
-              link.href === "/admin"
-                ? pathname === "/admin"
-                : pathname.startsWith(link.href);
-            const Icon = link.icon;
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold ${
-                  active ? "bg-action text-white" : "text-white/80 hover:bg-white/10"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {link.label}
-              </Link>
-            );
-          })}
+        <nav className="flex flex-col gap-4 p-3">
+          {sections.map((section) => (
+            <div key={section.title}>
+              <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-white/40">
+                {section.title}
+              </p>
+              <div className="mt-1 flex flex-col gap-1">
+                {section.links.map((link) => {
+                  const active = isActive(pathname, link.href);
+                  const Icon = link.icon;
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => setOpen(false)}
+                      className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold ${
+                        active
+                          ? "bg-action text-white"
+                          : "text-white/80 hover:bg-white/10"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {link.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
           <button
             type="button"
             onClick={logout}
-            className="mt-4 flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-white/80 hover:bg-white/10"
+            className="mt-2 flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-white/80 hover:bg-white/10"
           >
             <LogOut className="h-4 w-4" />
             Logout

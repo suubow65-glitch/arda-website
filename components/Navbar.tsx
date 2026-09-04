@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { Mail, MapPin, Menu, Phone, X } from "lucide-react";
 import SafeImage from "@/components/SafeImage";
 import { navLinks } from "@/data/mockData";
-import { getSiteSettings } from "@/lib/content";
+import { getAlertBanner, getSiteSettings } from "@/lib/content";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -14,6 +14,8 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [settings, setSettings] =
     useState<Awaited<ReturnType<typeof getSiteSettings>> | null>(null);
+  const [banner, setBanner] = useState<Awaited<ReturnType<typeof getAlertBanner>> | null>(null);
+  const [bannerClosed, setBannerClosed] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -28,10 +30,38 @@ export default function Navbar() {
 
   useEffect(() => {
     getSiteSettings().then((s) => setSettings(s));
+    getAlertBanner().then((b) => setBanner(b));
   }, []);
 
   return (
     <header className="sticky top-0 z-50">
+      {banner && banner.active && !bannerClosed && (
+        <div
+          className="relative px-4 py-2 text-center text-sm font-semibold text-white"
+          style={{ backgroundColor: banner.bgColor || "#C60C30" }}
+        >
+          <div className="container-arda flex items-center justify-center gap-3">
+            <span>{banner.message}</span>
+            {banner.buttonText && banner.buttonUrl && (
+              <a
+                href={banner.buttonUrl}
+                className="rounded bg-white/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wide hover:bg-white/30"
+              >
+                {banner.buttonText}
+              </a>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setBannerClosed(true)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-white/80 hover:text-white"
+            aria-label="Close alert banner"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       <div className="bg-navy text-white">
         <div className="container-arda flex flex-wrap items-center justify-between gap-2 py-2 text-xs sm:text-sm">
           <a

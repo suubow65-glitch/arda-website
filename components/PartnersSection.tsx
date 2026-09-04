@@ -3,13 +3,31 @@
 import { useEffect, useState } from "react";
 import SafeImage from "@/components/SafeImage";
 import { getPartners } from "@/lib/content";
+import { storageKeys } from "@/lib/storage";
 import { mapPartner } from "@/lib/mappers";
 
 export default function PartnersSection() {
   const [partners, setPartners] = useState<ReturnType<typeof mapPartner>[]>([]);
 
   useEffect(() => {
-    getPartners().then(setPartners);
+    function load() {
+      getPartners().then(setPartners);
+    }
+    load();
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === storageKeys.partners || e.key === "arda_user_custom_partners_v1") {
+        load();
+      }
+    };
+    const onUpdate = () => load();
+
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("arda-partners-updated", onUpdate);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("arda-partners-updated", onUpdate);
+    };
   }, []);
 
   return (
@@ -18,6 +36,7 @@ export default function PartnersSection() {
         const logo =
           partner.logoUrl ||
           (partner as { logo_url?: string }).logo_url ||
+          (partner as { logo?: string }).logo ||
           "";
         return logo ? (
           <a
@@ -30,7 +49,7 @@ export default function PartnersSection() {
             <SafeImage
               src={logo}
               alt={partner.name}
-              className="mb-2 h-12 max-w-[150px] object-contain"
+              className="mb-2 h-12 max-w-[160px] object-contain"
             />
           </a>
         ) : (

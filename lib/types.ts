@@ -133,3 +133,50 @@ export type AdminCredentialRow = {
   passcode: string;
   updated_at: string;
 };
+
+export type AlertBannerRow = {
+  id: string;
+  message: string;
+  button_text: string | null;
+  button_url: string | null;
+  active: boolean;
+  bg_color: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PageHeaderRow = {
+  id: string;
+  page_key: string;
+  section_key: string;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PillarRow = {
+  id: string;
+  title: string;
+  category_slug: string;
+  icon_name: string;
+  short_desc: string;
+  full_content: string;
+  interventions: string[];
+  order_index: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GalleryPhotoRow = {
+  id: string;
+  title: string;
+  location: string | null;
+  category: string | null;
+  image_url: string;
+  date: string | null;
+  featured: boolean;
+  created_at: string;
+};

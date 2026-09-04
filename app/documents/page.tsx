@@ -26,6 +26,8 @@ export default function DocumentsPage() {
         kicker="Accountability"
         title="Documents & Reports"
         description="Official ARDA publications, policies and reports for partners, donors and the public."
+        pageKey="documents"
+        sectionKey="hero"
       />
       <section className="py-16">
         <div className="container-arda">

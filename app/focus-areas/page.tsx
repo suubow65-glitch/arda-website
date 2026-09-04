@@ -1,47 +1,36 @@
 import type { Metadata } from "next";
-import {
-  Apple,
-  Droplets,
-  GraduationCap,
-  Handshake,
-  Shield,
-  Sprout,
-  Stethoscope,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
 import PageHero from "@/components/PageHero";
-import type { FocusArea } from "@/data/mockData";
-import { focusAreas } from "@/data/mockData";
-
-const icons: Record<FocusArea["icon"], LucideIcon> = {
-  peace: Handshake,
-  youth: Users,
-  food: Sprout,
-  education: GraduationCap,
-  health: Stethoscope,
-  nutrition: Apple,
-  wash: Droplets,
-  protection: Shield,
-};
+import { getPillars } from "@/lib/content";
+import { getPillarIcon } from "@/lib/pillarIcons";
+import type { Pillar } from "@/lib/mappers";
 
 export const metadata: Metadata = {
   title: "Focus Areas",
 };
 
-export default function FocusAreasPage() {
+export default async function FocusAreasPage() {
+  const pillars = (await getPillars()) as Pillar[];
+
   return (
     <>
       <PageHero
         kicker="Programmes"
         title="Thematic Sectors"
         description="ARDA concentrates resources across eight core pillars, from peace and protection to health, nutrition, WASH and inclusive education."
+        pageKey="focus-areas"
+        sectionKey="hero"
       />
       <section className="py-16">
         <div className="container-arda">
           <div className="space-y-12">
-            {focusAreas.map((area, index) => {
-              const Icon = icons[area.icon];
+            {pillars.length === 0 && (
+              <p className="text-center text-navy/60">
+                No focus pillars published yet.
+              </p>
+            )}
+            {pillars.map((area, index) => {
+              const Icon = getPillarIcon(area.icon);
+              const interventions = (area as { interventions?: string[] }).interventions || [];
               return (
                 <article
                   key={area.slug}
@@ -59,22 +48,28 @@ export default function FocusAreasPage() {
                       {area.title}
                     </h2>
                     <p className="mt-3 leading-relaxed text-navy/70">
-                      {area.longDescription}
+                      {(area as { longDescription?: string }).longDescription ||
+                        (area as { shortDesc?: string }).shortDesc ||
+                        (area as { description?: string }).description}
                     </p>
-                    <h3 className="mt-6 text-sm font-semibold uppercase tracking-wide text-navy">
-                      Key sub-interventions
-                    </h3>
-                    <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {area.interventions.map((item) => (
-                        <li
-                          key={item}
-                          className="flex items-start gap-2 text-sm text-navy/80"
-                        >
-                          <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-relief" />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
+                    {interventions.length > 0 && (
+                      <>
+                        <h3 className="mt-6 text-sm font-semibold uppercase tracking-wide text-navy">
+                          Key sub-interventions
+                        </h3>
+                        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {interventions.map((item: string) => (
+                            <li
+                              key={item}
+                              className="flex items-start gap-2 text-sm text-navy/80"
+                            >
+                              <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-relief" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
                   </div>
                 </article>
               );

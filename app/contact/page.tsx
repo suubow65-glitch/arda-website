@@ -20,6 +20,8 @@ export default function ContactPage() {
         kicker="Get in touch"
         title="Contact Us"
         description="Partner with ARDA on relief and development programmes across Southwest State and Banadir, Somalia."
+        pageKey="contact"
+        sectionKey="hero"
       />
       <section className="py-16">
         <div className="container-arda grid gap-10 lg:grid-cols-5">

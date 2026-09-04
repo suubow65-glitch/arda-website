@@ -82,6 +82,8 @@ export default async function AboutPage() {
         kicker="Who we are"
         title="About ARDA"
         description={settings.tagline}
+        pageKey="about"
+        sectionKey="hero"
       />
 
       <section className="py-16">

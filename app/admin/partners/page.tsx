@@ -10,6 +10,7 @@ import type { PartnerRow } from "@/lib/types";
 const empty = { name: "", initials: "", website_url: "", order_index: 0 };
 
 const adminKey = "arda_admin_partners_list";
+const customKey = "arda_user_custom_partners_v1";
 
 const defaultPartners: PartnerRow[] = mockPartners.map((p, i) => ({
   id: p.name,
@@ -20,6 +21,14 @@ const defaultPartners: PartnerRow[] = mockPartners.map((p, i) => ({
   order_index: i,
   created_at: new Date().toISOString(),
 }));
+
+function persistAll(rows: PartnerRow[]) {
+  if (typeof window === "undefined") return;
+  setLocalItem(adminKey, rows);
+  setLocalItem(customKey, { userModified: true, partners: rows });
+  setLocalItem(storageKeys.partners, rows.map(mapPartner));
+  window.dispatchEvent(new Event("arda-partners-updated"));
+}
 
 export default function PartnersAdminPage() {
   const [items, setItems] = useState<PartnerRow[]>([]);
@@ -33,27 +42,26 @@ export default function PartnersAdminPage() {
 
   async function load() {
     setLoading(true);
-    const saved = getLocalItem<PartnerRow[]>(adminKey);
-    if (saved) {
-      setItems(saved);
-      setLoading(false);
-      return;
-    }
     try {
       const res = await fetch("/api/admin/partners");
-      if (!res.ok) throw new Error("Failed to load partners.");
-      const data = (await res.json()) as { partners: PartnerRow[] };
-      const list = data.partners.length ? data.partners : defaultPartners;
-      setItems(list);
-      setLocalItem(adminKey, list);
-      setLocalItem(storageKeys.partners, list.map(mapPartner));
+      if (res.ok) {
+        const data = (await res.json()) as { partners: PartnerRow[] };
+        const list = data.partners.length ? data.partners : getLocalItem<PartnerRow[]>(adminKey) || defaultPartners;
+        setItems(list);
+        persistAll(list);
+        setLoading(false);
+        return;
+      }
     } catch {
-      setItems(defaultPartners);
-      setLocalItem(adminKey, defaultPartners);
-      setLocalItem(storageKeys.partners, defaultPartners.map(mapPartner));
-    } finally {
-      setLoading(false);
+      // ignore
     }
+    const saved =
+      getLocalItem<PartnerRow[]>(adminKey) ||
+      (getLocalItem<{ userModified: boolean; partners: PartnerRow[] }>(customKey)?.partners) ||
+      defaultPartners;
+    setItems(saved);
+    persistAll(saved);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -86,29 +94,32 @@ export default function PartnersAdminPage() {
     const file = fileRef.current?.files?.[0];
     if (file) fd.set("logo", file);
 
+    const tempId = editing.id || String(Date.now());
     const next = editing.id
-      ? items.map((i) =>
-          i.id === editing.id ? ({ ...i, ...editing } as PartnerRow) : i
-        )
-      : [...items, { ...editing, id: String(Date.now()) } as PartnerRow];
+      ? items.map((i) => (i.id === editing.id ? ({ ...i, ...editing } as PartnerRow) : i))
+      : [...items, { ...editing, id: tempId } as PartnerRow];
     setItems(next);
-    setLocalItem(adminKey, next);
-    setLocalItem(storageKeys.partners, next.map(mapPartner));
+    persistAll(next);
 
     try {
-      const url = editing.id
-        ? `/api/admin/partners/${editing.id}`
-        : "/api/admin/partners";
+      const url = editing.id ? `/api/admin/partners/${editing.id}` : "/api/admin/partners";
       const method = editing.id ? "PATCH" : "POST";
       const res = await fetch(url, { method, body: fd });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; partner?: PartnerRow };
       if (!res.ok) throw new Error(data.error || "Save failed.");
+      if (data.partner) {
+        const synced = editing.id
+          ? items.map((i) => (i.id === editing.id ? data.partner! : i))
+          : [...items, data.partner!];
+        setItems(synced);
+        persistAll(synced);
+      }
       setOpen(false);
       setEditing(empty);
       if (fileRef.current) fileRef.current.value = "";
-      await load();
-    } catch {
       setSuccess("Saved Successfully!");
+    } catch {
+      setSuccess("Saved locally (cloud unavailable).");
     } finally {
       setSaving(false);
     }
@@ -120,15 +131,14 @@ export default function PartnersAdminPage() {
     setSuccess("");
     const next = items.filter((i) => i.id !== id);
     setItems(next);
-    setLocalItem(adminKey, next);
-    setLocalItem(storageKeys.partners, next.map(mapPartner));
+    persistAll(next);
     try {
       const res = await fetch(`/api/admin/partners/${id}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
-      await load();
+      setSuccess("Deleted successfully!");
     } catch {
-      setSuccess("Saved Successfully!");
+      setSuccess("Removed locally.");
     }
   }
 
@@ -145,14 +155,10 @@ export default function PartnersAdminPage() {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </p>
+        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       )}
       {success && (
-        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
-          {success}
-        </p>
+        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</p>
       )}
 
       {open && (

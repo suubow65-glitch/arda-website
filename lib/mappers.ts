@@ -3,10 +3,14 @@ import { coreValues, org } from "@/data/mockData";
 import type {
   AboutContentRow,
   ActivityRow,
+  AlertBannerRow,
   CoreValue,
   DocumentRow,
+  GalleryPhotoRow,
   ImpactStatRow,
+  PageHeaderRow,
   PartnerRow,
+  PillarRow,
   SiteSettingsRow,
   SlideRow,
   TeamMemberRow,
@@ -162,4 +166,56 @@ export function formatBytes(bytes: number) {
     unit += 1;
   }
   return `${size.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+export function mapAlertBanner(row: AlertBannerRow) {
+  return {
+    id: row.id,
+    message: row.message,
+    buttonText: row.button_text || "",
+    buttonUrl: row.button_url || "",
+    active: row.active,
+    bgColor: row.bg_color,
+  };
+}
+
+export function mapPageHeader(row: PageHeaderRow) {
+  return {
+    id: row.id,
+    pageKey: row.page_key,
+    sectionKey: row.section_key,
+    title: row.title,
+    subtitle: row.subtitle || "",
+    description: row.description || "",
+  };
+}
+
+export function mapPillar(row: PillarRow) {
+  return {
+    id: row.id,
+    slug: row.category_slug,
+    title: row.title,
+    shortTitle: row.title,
+    shortDesc: row.short_desc,
+    description: row.short_desc,
+    longDescription: row.full_content,
+    interventions: row.interventions || [],
+    icon: row.icon_name,
+    orderIndex: row.order_index,
+    active: row.active,
+  };
+}
+
+export type Pillar = ReturnType<typeof mapPillar>;
+
+export function mapGalleryPhoto(row: GalleryPhotoRow) {
+  return {
+    id: row.id,
+    title: row.title,
+    location: row.location || "",
+    category: row.category || "",
+    image: row.image_url,
+    date: row.date || "",
+    featured: row.featured,
+  };
 }

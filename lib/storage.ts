@@ -38,4 +38,8 @@ export const storageKeys = {
   slides: "arda_public_slides",
   activities: "arda_public_activities",
   documents: "arda_public_documents",
+  alertBanner: "arda_public_alert_banner",
+  pageHeaders: "arda_public_page_headers",
+  pillars: "arda_public_pillars",
+  galleryPhotos: "arda_public_gallery_photos",
 };

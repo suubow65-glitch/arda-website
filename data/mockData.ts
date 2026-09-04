@@ -530,6 +530,7 @@ export const navLinks = [
   { href: "/about", label: "About Us" },
   { href: "/focus-areas", label: "Focus Areas" },
   { href: "/activities", label: "Activities" },
+  { href: "/gallery", label: "Gallery" },
   { href: "/documents", label: "Documents/Reports" },
   { href: "/careers", label: "Careers" },
   { href: "/contact", label: "Contact Us" },
