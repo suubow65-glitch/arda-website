@@ -38,6 +38,7 @@ export default function PartnersAdminPage() {
   const [success, setSuccess] = useState("");
   const [editing, setEditing] = useState<Partial<PartnerRow>>(empty);
   const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -70,14 +71,24 @@ export default function PartnersAdminPage() {
 
   function startAdd() {
     setEditing({ ...empty });
+    setPreview("");
     if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
   }
 
   function startEdit(item: PartnerRow) {
     setEditing(item);
+    setPreview(item.logo_url || "");
     if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setPreview(reader.result as string);
+    reader.readAsDataURL(file);
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -94,10 +105,17 @@ export default function PartnersAdminPage() {
     const file = fileRef.current?.files?.[0];
     if (file) fd.set("logo", file);
 
+    // Use the Base64 preview (or existing logo) as the immediate local logo URL
+    const logoUrl = preview || (editing.id ? editing.logo_url || "" : "");
+
     const tempId = editing.id || String(Date.now());
+    const nextItem: PartnerRow = editing.id
+      ? ({ ...(items.find((i) => i.id === editing.id) as PartnerRow), ...editing, logo_url: logoUrl } as PartnerRow)
+      : ({ ...empty, ...editing, id: tempId, logo_url: logoUrl, created_at: new Date().toISOString() } as PartnerRow);
+
     const next = editing.id
-      ? items.map((i) => (i.id === editing.id ? ({ ...i, ...editing } as PartnerRow) : i))
-      : [...items, { ...editing, id: tempId } as PartnerRow];
+      ? items.map((i) => (i.id === editing.id ? nextItem : i))
+      : [...items, nextItem];
     setItems(next);
     persistAll(next);
 
@@ -108,18 +126,28 @@ export default function PartnersAdminPage() {
       const data = (await res.json()) as { error?: string; partner?: PartnerRow };
       if (!res.ok) throw new Error(data.error || "Save failed.");
       if (data.partner) {
+        // Prefer the cloud-uploaded URL, but keep our local logo if the cloud omitted it
+        const serverPartner: PartnerRow = {
+          ...data.partner,
+          logo_url: data.partner.logo_url || logoUrl,
+        };
         const synced = editing.id
-          ? items.map((i) => (i.id === editing.id ? data.partner! : i))
-          : [...items, data.partner!];
+          ? items.map((i) => (i.id === editing.id ? serverPartner : i))
+          : [...items, serverPartner];
         setItems(synced);
         persistAll(synced);
       }
       setOpen(false);
       setEditing(empty);
+      setPreview("");
       if (fileRef.current) fileRef.current.value = "";
-      setSuccess("Saved Successfully!");
+      setSuccess("Partner Saved Successfully!");
     } catch {
-      setSuccess("Saved locally (cloud unavailable).");
+      setOpen(false);
+      setEditing(empty);
+      setPreview("");
+      if (fileRef.current) fileRef.current.value = "";
+      setSuccess("Partner Saved Successfully! (stored locally, cloud unavailable)");
     } finally {
       setSaving(false);
     }
@@ -216,10 +244,18 @@ export default function PartnersAdminPage() {
               ref={fileRef}
               type="file"
               accept="image/*"
+              onChange={handleFileChange}
               required={!editing.id}
               className="mt-1 w-full rounded-md border border-navy/15 bg-surface px-3 py-2.5 text-sm file:mr-3 file:rounded file:border-0 file:bg-action file:px-3 file:py-1 file:text-white"
             />
-            {editing.id && (
+            {preview && (
+              <img
+                src={preview}
+                alt="Logo preview"
+                className="mt-3 h-16 w-auto max-w-[200px] rounded-md border border-navy/10 bg-white object-contain p-2"
+              />
+            )}
+            {editing.id && !preview && (
               <p className="mt-1 text-xs text-navy/60">
                 Leave empty to keep the existing logo.
               </p>
@@ -231,7 +267,7 @@ export default function PartnersAdminPage() {
             </button>
             <button
               type="button"
-              onClick={() => { setOpen(false); setEditing(empty); if (fileRef.current) fileRef.current.value = ""; }}
+              onClick={() => { setOpen(false); setEditing(empty); setPreview(""); if (fileRef.current) fileRef.current.value = ""; }}
               className="rounded-md border border-navy/15 px-4 py-2.5 text-sm font-semibold text-navy hover:bg-surface"
             >
               Cancel

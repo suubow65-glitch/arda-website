@@ -68,6 +68,14 @@ export async function getPublishedSlides() {
       // fall through to offline fallback
     }
   }
+  const custom = getLocalItem<{ userModified: boolean; slides: SlideRow[] }>(
+    "arda_user_custom_slides_v1"
+  );
+  if (custom?.userModified && custom.slides?.length) {
+    return custom.slides
+      .filter((s) => s.active !== false)
+      .map(mapSlide);
+  }
   const cached = getLocalItem<ReturnType<typeof mapSlide>[]>(storageKeys.slides);
   if (cached) return cached;
   return mockSlides;
@@ -90,7 +98,9 @@ export async function getActivities() {
           .select("*")
           .order("date", { ascending: false });
         if (!error && data && data.length > 0) {
-          return sortByDateDesc((data as ActivityRow[]).map(mapActivity));
+          const mapped = sortByDateDesc((data as ActivityRow[]).map(mapActivity));
+          setLocalItem(storageKeys.activities, mapped);
+          return mapped;
         }
       }
     } catch {
@@ -138,23 +148,29 @@ export async function getDocuments() {
 }
 
 export async function getSiteSettings() {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("site_settings")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!error && data) {
+          const mapped = mapSiteSettings(data as SiteSettingsRow);
+          setLocalItem(storageKeys.settings, mapped);
+          return mapped;
+        }
+      }
+    } catch {
+      // fall through
+    }
+  }
   const cached = getLocalItem<ReturnType<typeof mapSiteSettings>>(storageKeys.settings);
   if (cached) return cached;
-  if (!isSupabaseConfigured()) return mapSiteSettings({} as SiteSettingsRow);
-  try {
-    const supabase = createSupabaseClient();
-    if (!supabase) return mapSiteSettings({} as SiteSettingsRow);
-    const { data, error } = await supabase
-      .from("site_settings")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error || !data) return mapSiteSettings({} as SiteSettingsRow);
-    return mapSiteSettings(data as SiteSettingsRow);
-  } catch {
-    return mapSiteSettings({} as SiteSettingsRow);
-  }
+  return mapSiteSettings({} as SiteSettingsRow);
 }
 
 export async function getAboutContent() {
@@ -225,14 +241,18 @@ export async function getPartners() {
       // fall through
     }
   }
+  const custom = getLocalItem<{ userModified: boolean; partners: PartnerRow[] }>(
+    "arda_user_custom_partners_v1"
+  );
+  if (custom?.userModified && custom.partners?.length) {
+    return custom.partners.map(mapPartner);
+  }
   const cached = getLocalItem<ReturnType<typeof mapPartner>[]>(storageKeys.partners);
   if (cached) return cached;
   return fallback;
 }
 
 export async function getTeamMembers() {
-  const cached = getLocalItem<ReturnType<typeof mapTeamMember>[]>(storageKeys.team);
-  if (cached) return cached;
   const fallback = [
     ...boardMembers.map((m) => ({
       id: m.name,
@@ -253,19 +273,27 @@ export async function getTeamMembers() {
       orderIndex: 0,
     })),
   ];
-  if (!isSupabaseConfigured()) return fallback;
-  try {
-    const supabase = createSupabaseClient();
-    if (!supabase) return fallback;
-    const { data, error } = await supabase
-      .from("team_members")
-      .select("*")
-      .order("order_index", { ascending: true });
-    if (error || !data?.length) return fallback;
-    return (data as TeamMemberRow[]).map(mapTeamMember);
-  } catch {
-    return fallback;
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("team_members")
+          .select("*")
+          .order("order_index", { ascending: true });
+        if (!error && data && data.length > 0) {
+          const mapped = (data as TeamMemberRow[]).map(mapTeamMember);
+          setLocalItem(storageKeys.team, mapped);
+          return mapped;
+        }
+      }
+    } catch {
+      // fall through
+    }
   }
+  const cached = getLocalItem<ReturnType<typeof mapTeamMember>[]>(storageKeys.team);
+  if (cached) return cached;
+  return fallback;
 }
 
 export async function getVacancies() {
