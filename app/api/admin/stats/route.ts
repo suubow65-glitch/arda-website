@@ -1,11 +1,14 @@
-import { NextResponse } from "next/server";
+import { noStoreJson } from "@/lib/apiCache";
 import { requireAdmin } from "@/lib/requireAdmin";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json({
+    return noStoreJson({
       activities: 0,
       documents: 0,
       unreadMessages: 0,
@@ -21,7 +24,7 @@ export async function GET() {
         .select("id", { count: "exact", head: true })
         .eq("read", false),
     ]);
-    return NextResponse.json({
+    return noStoreJson({
       activities: activities.count ?? 0,
       documents: documents.count ?? 0,
       unreadMessages: unread.count ?? 0,
@@ -29,7 +32,7 @@ export async function GET() {
     });
   } catch (err) {
     console.error("dashboard stats GET exception:", err);
-    return NextResponse.json({
+    return noStoreJson({
       activities: 0,
       documents: 0,
       unreadMessages: 0,

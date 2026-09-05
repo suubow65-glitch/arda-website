@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
+import { noStoreJson } from "@/lib/apiCache";
 import { requireAdmin, uploadPublicFile } from "@/lib/requireAdmin";
 import { seedTeamRows } from "@/lib/seedData";
 import type { TeamMemberRow } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json({ team: [] });
+    return noStoreJson({ team: [] });
   }
   try {
     const { data, error: queryError } = await supabase
@@ -16,7 +20,7 @@ export async function GET() {
       .order("order_index", { ascending: true });
     if (queryError) {
       console.error("team_members GET error:", queryError.message);
-      return NextResponse.json({ team: [] });
+      return noStoreJson({ team: [] });
     }
     if (!data || data.length === 0) {
       const { data: seeded, error: seedError } = await supabase
@@ -25,14 +29,14 @@ export async function GET() {
         .select("*")
         .order("order_index", { ascending: true });
       if (seedError || !seeded) {
-        return NextResponse.json({ team: [] });
+        return noStoreJson({ team: [] });
       }
-      return NextResponse.json({ team: seeded as TeamMemberRow[] });
+      return noStoreJson({ team: seeded as TeamMemberRow[] });
     }
-    return NextResponse.json({ team: data as TeamMemberRow[] });
+    return noStoreJson({ team: data as TeamMemberRow[] });
   } catch (err) {
     console.error("team_members GET exception:", err);
-    return NextResponse.json({ team: [] });
+    return noStoreJson({ team: [] });
   }
 }
 
@@ -40,7 +44,7 @@ export async function POST(request: Request) {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "Supabase is not configured. Add URL and keys to .env.local." },
       { status: 503 }
     );
@@ -68,11 +72,11 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 400 });
+      return noStoreJson({ error: insertError.message }, { status: 400 });
     }
-    return NextResponse.json({ member: data as TeamMemberRow });
+    return noStoreJson({ member: data as TeamMemberRow });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Save failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return noStoreJson({ error: message }, { status: 500 });
   }
 }

@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
+import { noStoreJson } from "@/lib/apiCache";
 import { requireAdmin, uploadPublicFile } from "@/lib/requireAdmin";
 import { seedPartnerRows } from "@/lib/seedData";
 import type { PartnerRow } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json({ partners: [] });
+    return noStoreJson({ partners: [] });
   }
   try {
     const { data, error: queryError } = await supabase
@@ -16,7 +20,7 @@ export async function GET() {
       .order("order_index", { ascending: true });
     if (queryError) {
       console.error("partners GET error:", queryError.message);
-      return NextResponse.json({ partners: [] });
+      return noStoreJson({ partners: [] });
     }
     if (!data || data.length === 0) {
       const { data: seeded, error: seedError } = await supabase
@@ -25,14 +29,14 @@ export async function GET() {
         .select("*")
         .order("order_index", { ascending: true });
       if (seedError || !seeded) {
-        return NextResponse.json({ partners: [] });
+        return noStoreJson({ partners: [] });
       }
-      return NextResponse.json({ partners: seeded as PartnerRow[] });
+      return noStoreJson({ partners: seeded as PartnerRow[] });
     }
-    return NextResponse.json({ partners: data as PartnerRow[] });
+    return noStoreJson({ partners: data as PartnerRow[] });
   } catch (err) {
     console.error("partners GET exception:", err);
-    return NextResponse.json({ partners: [] });
+    return noStoreJson({ partners: [] });
   }
 }
 
@@ -40,7 +44,7 @@ export async function POST(request: Request) {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "Supabase is not configured. Add URL and keys to .env.local." },
       { status: 503 }
     );
@@ -67,11 +71,11 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 400 });
+      return noStoreJson({ error: insertError.message }, { status: 400 });
     }
-    return NextResponse.json({ partner: data as PartnerRow });
+    return noStoreJson({ partner: data as PartnerRow });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Save failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return noStoreJson({ error: message }, { status: 500 });
   }
 }

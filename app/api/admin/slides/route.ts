@@ -1,13 +1,16 @@
-import { NextResponse } from "next/server";
+import { noStoreJson } from "@/lib/apiCache";
 import { requireAdmin, uploadPublicFile } from "@/lib/requireAdmin";
 import { createServiceSupabase } from "@/lib/supabaseAdmin";
 import { seedSlideRows } from "@/lib/seedData";
 import type { SlideRow } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   const supabase = createServiceSupabase();
   if (!supabase) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "Supabase is not configured. Add URL and keys to .env.local." },
       { status: 503 }
     );
@@ -20,7 +23,7 @@ export async function GET() {
       .order("order_index", { ascending: true });
     if (queryError) {
       console.error("slides GET error:", queryError.message);
-      return NextResponse.json({ slides: [] });
+      return noStoreJson({ slides: [] });
     }
     if (!data || data.length === 0) {
       // Check if the table is truly empty (not just filtered by active=true)
@@ -34,15 +37,15 @@ export async function GET() {
           .select("*")
           .order("order_index", { ascending: true });
         if (seedError || !seeded) {
-          return NextResponse.json({ slides: [] });
+          return noStoreJson({ slides: [] });
         }
-        return NextResponse.json({ slides: seeded as SlideRow[] });
+        return noStoreJson({ slides: seeded as SlideRow[] });
       }
     }
-    return NextResponse.json({ slides: (data ?? []) as SlideRow[] });
+    return noStoreJson({ slides: (data ?? []) as SlideRow[] });
   } catch (err) {
     console.error("slides GET exception:", err);
-    return NextResponse.json({ slides: [] });
+    return noStoreJson({ slides: [] });
   }
 }
 
@@ -50,7 +53,7 @@ export async function POST(request: Request) {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "Supabase is not configured. Add URL and keys to .env.local." },
       { status: 503 }
     );
@@ -63,7 +66,7 @@ export async function POST(request: Request) {
       imageUrl = await uploadPublicFile(supabase, "slide-images", file);
     }
     if (!imageUrl) {
-      return NextResponse.json({ error: "A banner image is required." }, { status: 400 });
+      return noStoreJson({ error: "A banner image is required." }, { status: 400 });
     }
 
     const payload = {
@@ -83,11 +86,11 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 400 });
+      return noStoreJson({ error: insertError.message }, { status: 400 });
     }
-    return NextResponse.json({ slide: data as SlideRow });
+    return noStoreJson({ slide: data as SlideRow });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Save failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return noStoreJson({ error: message }, { status: 500 });
   }
 }

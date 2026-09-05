@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
+import { noStoreJson } from "@/lib/apiCache";
 import { requireAdmin, uploadPublicFile } from "@/lib/requireAdmin";
 import type { GalleryPhotoRow } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
+    return noStoreJson({ error: "Supabase is not configured." }, { status: 503 });
   }
   try {
     const { data, error: queryError } = await supabase
@@ -15,12 +19,12 @@ export async function GET() {
       .order("created_at", { ascending: false });
     if (queryError) {
       console.error("gallery_photos GET error:", queryError.message);
-      return NextResponse.json({ photos: [] });
+      return noStoreJson({ photos: [] });
     }
-    return NextResponse.json({ photos: (data ?? []) as GalleryPhotoRow[] });
+    return noStoreJson({ photos: (data ?? []) as GalleryPhotoRow[] });
   } catch (err) {
     console.error("gallery_photos GET exception:", err);
-    return NextResponse.json({ photos: [] });
+    return noStoreJson({ photos: [] });
   }
 }
 
@@ -28,7 +32,7 @@ export async function POST(request: Request) {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
+    return noStoreJson({ error: "Supabase is not configured." }, { status: 503 });
   }
   try {
     const form = await request.formData();
@@ -38,7 +42,7 @@ export async function POST(request: Request) {
       imageUrl = await uploadPublicFile(supabase, "gallery-photos", file);
     }
     if (!imageUrl) {
-      return NextResponse.json({ error: "A photo image is required." }, { status: 400 });
+      return noStoreJson({ error: "A photo image is required." }, { status: 400 });
     }
     const payload = {
       title: String(form.get("title") || ""),
@@ -54,11 +58,11 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 400 });
+      return noStoreJson({ error: insertError.message }, { status: 400 });
     }
-    return NextResponse.json({ photo: data as GalleryPhotoRow });
+    return noStoreJson({ photo: data as GalleryPhotoRow });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Save failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return noStoreJson({ error: message }, { status: 500 });
   }
 }

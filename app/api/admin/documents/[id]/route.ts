@@ -1,5 +1,8 @@
-import { NextResponse } from "next/server";
+import { noStoreJson } from "@/lib/apiCache";
 import { requireAdmin } from "@/lib/requireAdmin";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type Params = { params: { id: string } };
 
@@ -7,7 +10,7 @@ export async function DELETE(_request: Request, { params }: Params) {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "Supabase is not configured. Add URL and keys to .env.local." },
       { status: 503 }
     );
@@ -18,11 +21,11 @@ export async function DELETE(_request: Request, { params }: Params) {
       .delete()
       .eq("id", params.id);
     if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 400 });
+      return noStoreJson({ error: deleteError.message }, { status: 400 });
     }
-    return NextResponse.json({ ok: true });
+    return noStoreJson({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Delete failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return noStoreJson({ error: message }, { status: 500 });
   }
 }

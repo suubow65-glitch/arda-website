@@ -1,12 +1,15 @@
-import { NextResponse } from "next/server";
+import { noStoreJson } from "@/lib/apiCache";
 import { requireAdmin } from "@/lib/requireAdmin";
 import type { ContactMessageRow } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "Supabase is not configured. Add URL and keys to .env.local." },
       { status: 503 }
     );
@@ -18,11 +21,11 @@ export async function GET() {
       .order("created_at", { ascending: false });
     if (queryError) {
       console.error("contact_messages GET error:", queryError.message);
-      return NextResponse.json({ messages: [] });
+      return noStoreJson({ messages: [] });
     }
-    return NextResponse.json({ messages: (data ?? []) as ContactMessageRow[] });
+    return noStoreJson({ messages: (data ?? []) as ContactMessageRow[] });
   } catch (err) {
     console.error("contact_messages GET exception:", err);
-    return NextResponse.json({ messages: [] });
+    return noStoreJson({ messages: [] });
   }
 }

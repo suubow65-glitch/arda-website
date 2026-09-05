@@ -394,3 +394,96 @@ create policy "Public read gallery-photos"
   on storage.objects for select
   to anon, authenticated
   using (bucket_id = 'gallery-photos');
+
+-- =====================================================================
+-- WARNING — FULLY OPEN READ/WRITE POLICIES (explicitly requested)
+-- =====================================================================
+-- The block below grants UNRESTRICTED select/insert/update/delete to the
+-- `anon` (and `authenticated`) role on every application table and to
+-- every storage bucket's objects. Because the Supabase anon key ships
+-- inside the public browser bundle, this means ANY visitor to the website
+-- can read, create, modify, or permanently delete ANY row or file in this
+-- project — completely bypassing the admin login. The app's own admin API
+-- routes do NOT need this (they already use the service-role key, which
+-- bypasses RLS entirely), so this section exists purely to satisfy an
+-- explicit request for open public read/write access. If you did not mean
+-- to allow anonymous visitors to edit/delete your live NGO data, remove
+-- this block and rely on the narrower "Public can read ..." policies
+-- defined above instead.
+-- =====================================================================
+
+do $$
+declare
+  t text;
+  tables text[] := array[
+    'slides', 'activities', 'documents', 'contact_messages',
+    'site_settings', 'about_content', 'impact_stats', 'partners',
+    'team_members', 'vacancies', 'admin_credentials',
+    'alert_banner', 'page_headers', 'pillars', 'gallery_photos'
+  ];
+begin
+  foreach t in array tables loop
+    execute format('grant select, insert, update, delete on table public.%I to anon, authenticated;', t);
+    execute format('drop policy if exists "Open access select" on public.%I;', t);
+    execute format('create policy "Open access select" on public.%I for select to anon, authenticated using (true);', t);
+    execute format('drop policy if exists "Open access insert" on public.%I;', t);
+    execute format('create policy "Open access insert" on public.%I for insert to anon, authenticated with check (true);', t);
+    execute format('drop policy if exists "Open access update" on public.%I;', t);
+    execute format('create policy "Open access update" on public.%I for update to anon, authenticated using (true) with check (true);', t);
+    execute format('drop policy if exists "Open access delete" on public.%I;', t);
+    execute format('create policy "Open access delete" on public.%I for delete to anon, authenticated using (true);', t);
+  end loop;
+end $$;
+
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on storage.objects to anon, authenticated;
+
+drop policy if exists "Open access storage select" on storage.objects;
+create policy "Open access storage select"
+  on storage.objects for select
+  to anon, authenticated
+  using (
+    bucket_id in (
+      'slide-images', 'activity-images', 'pdf-documents',
+      'partner-logos', 'team-photos', 'vacancy-files', 'gallery-photos'
+    )
+  );
+
+drop policy if exists "Open access storage insert" on storage.objects;
+create policy "Open access storage insert"
+  on storage.objects for insert
+  to anon, authenticated
+  with check (
+    bucket_id in (
+      'slide-images', 'activity-images', 'pdf-documents',
+      'partner-logos', 'team-photos', 'vacancy-files', 'gallery-photos'
+    )
+  );
+
+drop policy if exists "Open access storage update" on storage.objects;
+create policy "Open access storage update"
+  on storage.objects for update
+  to anon, authenticated
+  using (
+    bucket_id in (
+      'slide-images', 'activity-images', 'pdf-documents',
+      'partner-logos', 'team-photos', 'vacancy-files', 'gallery-photos'
+    )
+  )
+  with check (
+    bucket_id in (
+      'slide-images', 'activity-images', 'pdf-documents',
+      'partner-logos', 'team-photos', 'vacancy-files', 'gallery-photos'
+    )
+  );
+
+drop policy if exists "Open access storage delete" on storage.objects;
+create policy "Open access storage delete"
+  on storage.objects for delete
+  to anon, authenticated
+  using (
+    bucket_id in (
+      'slide-images', 'activity-images', 'pdf-documents',
+      'partner-logos', 'team-photos', 'vacancy-files', 'gallery-photos'
+    )
+  );

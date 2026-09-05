@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
+import { noStoreJson } from "@/lib/apiCache";
 import { requireAdmin, uploadPublicFile } from "@/lib/requireAdmin";
 import { seedVacancyRows } from "@/lib/seedData";
 import type { VacancyRow } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json({ vacancies: [] });
+    return noStoreJson({ vacancies: [] });
   }
   try {
     const { data, error: queryError } = await supabase
@@ -16,7 +20,7 @@ export async function GET() {
       .order("order_index", { ascending: true });
     if (queryError) {
       console.error("vacancies GET error:", queryError.message);
-      return NextResponse.json({ vacancies: [] });
+      return noStoreJson({ vacancies: [] });
     }
     if (!data || data.length === 0) {
       const { data: seeded, error: seedError } = await supabase
@@ -25,14 +29,14 @@ export async function GET() {
         .select("*")
         .order("order_index", { ascending: true });
       if (seedError || !seeded) {
-        return NextResponse.json({ vacancies: [] });
+        return noStoreJson({ vacancies: [] });
       }
-      return NextResponse.json({ vacancies: seeded as VacancyRow[] });
+      return noStoreJson({ vacancies: seeded as VacancyRow[] });
     }
-    return NextResponse.json({ vacancies: data as VacancyRow[] });
+    return noStoreJson({ vacancies: data as VacancyRow[] });
   } catch (err) {
     console.error("vacancies GET exception:", err);
-    return NextResponse.json({ vacancies: [] });
+    return noStoreJson({ vacancies: [] });
   }
 }
 
@@ -40,7 +44,7 @@ export async function POST(request: Request) {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "Supabase is not configured. Add URL and keys to .env.local." },
       { status: 503 }
     );
@@ -70,11 +74,11 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 400 });
+      return noStoreJson({ error: insertError.message }, { status: 400 });
     }
-    return NextResponse.json({ vacancy: data as VacancyRow });
+    return noStoreJson({ vacancy: data as VacancyRow });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Save failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return noStoreJson({ error: message }, { status: 500 });
   }
 }

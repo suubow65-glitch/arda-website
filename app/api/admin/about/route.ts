@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
+import { noStoreJson } from "@/lib/apiCache";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { seedAboutContentRow } from "@/lib/seedData";
 import type { AboutContentRow } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json({ about: null });
+    return noStoreJson({ about: null });
   }
   try {
     const { data, error: queryError } = await supabase
@@ -18,7 +22,7 @@ export async function GET() {
       .maybeSingle();
     if (queryError) {
       console.error("about_content GET error:", queryError.message);
-      return NextResponse.json({ about: null });
+      return noStoreJson({ about: null });
     }
     if (!data) {
       const { data: seeded, error: seedError } = await supabase
@@ -27,14 +31,14 @@ export async function GET() {
         .select("*")
         .single();
       if (seedError || !seeded) {
-        return NextResponse.json({ about: null });
+        return noStoreJson({ about: null });
       }
-      return NextResponse.json({ about: seeded as AboutContentRow });
+      return noStoreJson({ about: seeded as AboutContentRow });
     }
-    return NextResponse.json({ about: data as AboutContentRow });
+    return noStoreJson({ about: data as AboutContentRow });
   } catch (err) {
     console.error("about_content GET exception:", err);
-    return NextResponse.json({ about: null });
+    return noStoreJson({ about: null });
   }
 }
 
@@ -42,7 +46,7 @@ export async function POST(request: Request) {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "Supabase is not configured. Add URL and keys to .env.local." },
       { status: 503 }
     );
@@ -61,11 +65,11 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (upsertError) {
-      return NextResponse.json({ error: upsertError.message }, { status: 400 });
+      return noStoreJson({ error: upsertError.message }, { status: 400 });
     }
-    return NextResponse.json({ about: data as AboutContentRow });
+    return noStoreJson({ about: data as AboutContentRow });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Save failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return noStoreJson({ error: message }, { status: 500 });
   }
 }

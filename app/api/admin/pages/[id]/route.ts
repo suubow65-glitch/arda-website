@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
+import { noStoreJson } from "@/lib/apiCache";
 import { requireAdmin } from "@/lib/requireAdmin";
 import type { PageHeaderRow } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type Params = { params: { id: string } };
 
@@ -8,7 +12,7 @@ export async function PATCH(request: Request, { params }: Params) {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
+    return noStoreJson({ error: "Supabase is not configured." }, { status: 503 });
   }
   try {
     const form = await request.formData();
@@ -24,12 +28,12 @@ export async function PATCH(request: Request, { params }: Params) {
       .select("*")
       .single();
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+      return noStoreJson({ error: updateError.message }, { status: 400 });
     }
-    return NextResponse.json({ header: data as PageHeaderRow });
+    return noStoreJson({ header: data as PageHeaderRow });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Update failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return noStoreJson({ error: message }, { status: 500 });
   }
 }
 
@@ -37,7 +41,7 @@ export async function DELETE(_request: Request, { params }: Params) {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
+    return noStoreJson({ error: "Supabase is not configured." }, { status: 503 });
   }
   try {
     const { error: deleteError } = await supabase
@@ -45,11 +49,11 @@ export async function DELETE(_request: Request, { params }: Params) {
       .delete()
       .eq("id", params.id);
     if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 400 });
+      return noStoreJson({ error: deleteError.message }, { status: 400 });
     }
-    return NextResponse.json({ ok: true });
+    return noStoreJson({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Delete failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return noStoreJson({ error: message }, { status: 500 });
   }
 }

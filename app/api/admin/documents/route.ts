@@ -1,14 +1,17 @@
-import { NextResponse } from "next/server";
+import { noStoreJson } from "@/lib/apiCache";
 import { formatBytes } from "@/lib/mappers";
 import { requireAdmin, uploadPublicFile } from "@/lib/requireAdmin";
 import { seedDocumentRows } from "@/lib/seedData";
 import type { DocumentRow } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "Supabase is not configured. Add URL and keys to .env.local." },
       { status: 503 }
     );
@@ -20,7 +23,7 @@ export async function GET() {
       .order("created_at", { ascending: false });
     if (queryError) {
       console.error("documents GET error:", queryError.message);
-      return NextResponse.json({ documents: [] });
+      return noStoreJson({ documents: [] });
     }
     if (!data || data.length === 0) {
       const { data: seeded, error: seedError } = await supabase
@@ -29,14 +32,14 @@ export async function GET() {
         .select("*")
         .order("created_at", { ascending: false });
       if (seedError || !seeded) {
-        return NextResponse.json({ documents: [] });
+        return noStoreJson({ documents: [] });
       }
-      return NextResponse.json({ documents: seeded as DocumentRow[] });
+      return noStoreJson({ documents: seeded as DocumentRow[] });
     }
-    return NextResponse.json({ documents: data as DocumentRow[] });
+    return noStoreJson({ documents: data as DocumentRow[] });
   } catch (err) {
     console.error("documents GET exception:", err);
-    return NextResponse.json({ documents: [] });
+    return noStoreJson({ documents: [] });
   }
 }
 
@@ -44,7 +47,7 @@ export async function POST(request: Request) {
   const { error, supabase } = await requireAdmin();
   if (error) return error;
   if (!supabase) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: "Supabase is not configured. Add URL and keys to .env.local." },
       { status: 503 }
     );
@@ -59,7 +62,7 @@ export async function POST(request: Request) {
       fileSize = formatBytes(file.size);
     }
     if (!fileUrl) {
-      return NextResponse.json({ error: "A PDF file is required." }, { status: 400 });
+      return noStoreJson({ error: "A PDF file is required." }, { status: 400 });
     }
 
     const payload = {
@@ -76,11 +79,11 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 400 });
+      return noStoreJson({ error: insertError.message }, { status: 400 });
     }
-    return NextResponse.json({ document: data as DocumentRow });
+    return noStoreJson({ document: data as DocumentRow });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Save failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return noStoreJson({ error: message }, { status: 500 });
   }
 }

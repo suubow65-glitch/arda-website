@@ -130,21 +130,27 @@ export async function getLatestActivities(limit = 3) {
 }
 
 export async function getDocuments() {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("documents")
+          .select("*")
+          .order("year", { ascending: false });
+        if (!error && data && data.length > 0) {
+          const mapped = (data as DocumentRow[]).map(mapDocument);
+          setLocalItem(storageKeys.documents, mapped);
+          return mapped;
+        }
+      }
+    } catch {
+      // fall through
+    }
+  }
   const cached = getLocalItem<ReturnType<typeof mapDocument>[]>(storageKeys.documents);
   if (cached) return cached;
-  if (!isSupabaseConfigured()) return mockDocuments;
-  try {
-    const supabase = createSupabaseClient();
-    if (!supabase) return mockDocuments;
-    const { data, error } = await supabase
-      .from("documents")
-      .select("*")
-      .order("year", { ascending: false });
-    if (error || !data?.length) return mockDocuments;
-    return (data as DocumentRow[]).map(mapDocument);
-  } catch {
-    return mockDocuments;
-  }
+  return mockDocuments;
 }
 
 export async function getSiteSettings() {
@@ -174,43 +180,54 @@ export async function getSiteSettings() {
 }
 
 export async function getAboutContent() {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("about_content")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!error && data) {
+          const mapped = mapAboutContent(data as AboutContentRow);
+          setLocalItem(storageKeys.about, mapped);
+          return mapped;
+        }
+      }
+    } catch {
+      // fall through
+    }
+  }
   const cached = getLocalItem<{ vision: string; mission: string; coreValues: { title: string; description: string; icon: string }[] }>(storageKeys.about);
   if (cached) return cached;
-  if (!isSupabaseConfigured())
-    return { vision: org.vision, mission: org.mission, coreValues };
-  try {
-    const supabase = createSupabaseClient();
-    if (!supabase) return { vision: org.vision, mission: org.mission, coreValues };
-    const { data, error } = await supabase
-      .from("about_content")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error || !data)
-      return { vision: org.vision, mission: org.mission, coreValues };
-    return mapAboutContent(data as AboutContentRow);
-  } catch {
-    return { vision: org.vision, mission: org.mission, coreValues };
-  }
+  return { vision: org.vision, mission: org.mission, coreValues };
 }
 
 export async function getImpactStats() {
+  // Cloud-first for cross-device sync when Supabase is configured
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("impact_stats")
+          .select("*")
+          .order("order_index", { ascending: true });
+        if (!error && data && data.length > 0) {
+          const mapped = (data as ImpactStatRow[]).map(mapImpactStat);
+          setLocalItem(storageKeys.impactStats, mapped);
+          return mapped;
+        }
+      }
+    } catch {
+      // fall through
+    }
+  }
   const cached = getLocalItem<{ value: number; suffix: string; label: string }[]>(storageKeys.impactStats);
   if (cached) return cached;
-  if (!isSupabaseConfigured()) return impactStats;
-  try {
-    const supabase = createSupabaseClient();
-    if (!supabase) return impactStats;
-    const { data, error } = await supabase
-      .from("impact_stats")
-      .select("*")
-      .order("order_index", { ascending: true });
-    if (error || !data?.length) return impactStats;
-    return (data as ImpactStatRow[]).map(mapImpactStat);
-  } catch {
-    return impactStats;
-  }
+  return impactStats;
 }
 
 export async function getPartners() {
@@ -323,8 +340,6 @@ export async function getTeamMembers() {
 }
 
 export async function getVacancies() {
-  const cached = getLocalItem<ReturnType<typeof mapVacancy>[]>(storageKeys.vacancies);
-  if (cached) return cached;
   const fallback = [
     {
       id: "1",
@@ -339,20 +354,28 @@ export async function getVacancies() {
       orderIndex: 0,
     },
   ];
-  if (!isSupabaseConfigured()) return fallback;
-  try {
-    const supabase = createSupabaseClient();
-    if (!supabase) return fallback;
-    const { data, error } = await supabase
-      .from("vacancies")
-      .select("*")
-      .eq("status", "active")
-      .order("order_index", { ascending: true });
-    if (error || !data?.length) return fallback;
-    return (data as VacancyRow[]).map(mapVacancy);
-  } catch {
-    return fallback;
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseClient();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("vacancies")
+          .select("*")
+          .eq("status", "active")
+          .order("order_index", { ascending: true });
+        if (!error && data && data.length > 0) {
+          const mapped = (data as VacancyRow[]).map(mapVacancy);
+          setLocalItem(storageKeys.vacancies, mapped);
+          return mapped;
+        }
+      }
+    } catch {
+      // fall through
+    }
   }
+  const cached = getLocalItem<ReturnType<typeof mapVacancy>[]>(storageKeys.vacancies);
+  if (cached) return cached;
+  return fallback;
 }
 
 export async function getAlertBanner() {
