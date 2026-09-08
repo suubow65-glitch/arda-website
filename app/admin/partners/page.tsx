@@ -6,6 +6,7 @@ import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import { mapPartner } from "@/lib/mappers";
 import { compressPartnerLogo } from "@/lib/imageCompressor";
 import { partners as mockPartners } from "@/data/mockData";
+import { getBrowserSupabase, uploadDirectFile } from "@/lib/supabaseBrowser";
 import type { PartnerRow } from "@/lib/types";
 
 const empty = { name: "", initials: "", website_url: "", order_index: 0 };
@@ -31,6 +32,10 @@ function persistAll(rows: PartnerRow[]) {
   window.dispatchEvent(new Event("arda-partners-updated"));
 }
 
+function isUuid(id: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 export default function PartnersAdminPage() {
   const [items, setItems] = useState<PartnerRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,11 +50,29 @@ export default function PartnersAdminPage() {
 
   async function load() {
     setLoading(true);
+    const supabase = getBrowserSupabase();
+    if (supabase) {
+      try {
+        const { data, error: sbError } = await supabase
+          .from("partners")
+          .select("*")
+          .order("order_index", { ascending: true });
+        if (!sbError && data && data.length > 0) {
+          setItems(data as PartnerRow[]);
+          persistAll(data as PartnerRow[]);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // fallback to serverless route or storage
+      }
+    }
+
     try {
       const res = await fetch("/api/admin/partners", { cache: "no-store" });
       if (res.ok) {
         const data = (await res.json()) as { partners: PartnerRow[] };
-        const list = data.partners.length ? data.partners : getLocalItem<PartnerRow[]>(adminKey) || defaultPartners;
+        const list = data.partners?.length ? data.partners : defaultPartners;
         setItems(list);
         persistAll(list);
         setLoading(false);
@@ -58,6 +81,7 @@ export default function PartnersAdminPage() {
     } catch {
       // ignore
     }
+
     const saved =
       getLocalItem<PartnerRow[]>(adminKey) ||
       (getLocalItem<{ userModified: boolean; partners: PartnerRow[] }>(customKey)?.partners) ||
@@ -103,59 +127,94 @@ export default function PartnersAdminPage() {
     setError("");
     setSuccess("");
 
-    const fd = new FormData();
-    fd.set("name", editing.name ?? "");
-    fd.set("initials", editing.initials ?? "");
-    fd.set("website_url", editing.website_url ?? "");
-    fd.set("order_index", String(editing.order_index ?? 0));
     const file = compressedFileRef.current || fileRef.current?.files?.[0];
-    if (file) fd.set("logo", file);
-
-    // Use the Base64 preview (or existing logo) as the immediate local logo URL
-    const logoUrl = preview || (editing.id ? editing.logo_url || "" : "");
-
-    const tempId = editing.id || String(Date.now());
-    const nextItem: PartnerRow = editing.id
-      ? ({ ...(items.find((i) => i.id === editing.id) as PartnerRow), ...editing, logo_url: logoUrl } as PartnerRow)
-      : ({ ...empty, ...editing, id: tempId, logo_url: logoUrl, created_at: new Date().toISOString() } as PartnerRow);
-
-    const next = editing.id
-      ? items.map((i) => (i.id === editing.id ? nextItem : i))
-      : [...items, nextItem];
-    setItems(next);
-    persistAll(next);
+    const supabase = getBrowserSupabase();
 
     try {
-      const url = editing.id ? `/api/admin/partners/${editing.id}` : "/api/admin/partners";
-      const method = editing.id ? "PATCH" : "POST";
+      let logoUrl = preview || (editing.id ? editing.logo_url || "" : "");
+
+      // 1) Direct Supabase Cloud write if configured
+      if (supabase) {
+        if (file) {
+          try {
+            logoUrl = await uploadDirectFile(supabase, "partner-logos", file);
+          } catch (storageErr) {
+            console.warn("Storage upload failed, attempting fallback:", storageErr);
+          }
+        }
+
+        const payload = {
+          name: editing.name ?? "",
+          initials: editing.initials ?? "",
+          logo_url: logoUrl || null,
+          website_url: editing.website_url ?? null,
+          order_index: Number(editing.order_index ?? 0),
+        };
+
+        let resultRow: PartnerRow | null = null;
+        if (editing.id && isUuid(editing.id)) {
+          const { data, error: updateError } = await supabase
+            .from("partners")
+            .update(payload)
+            .eq("id", editing.id)
+            .select("*")
+            .single();
+          if (updateError) throw new Error(updateError.message);
+          resultRow = data as PartnerRow;
+        } else {
+          const { data, error: insertError } = await supabase
+            .from("partners")
+            .insert(payload)
+            .select("*")
+            .single();
+          if (insertError) throw new Error(insertError.message);
+          resultRow = data as PartnerRow;
+        }
+
+        if (resultRow) {
+          const synced = editing.id
+            ? items.map((i) => (i.id === editing.id ? resultRow! : i))
+            : [...items, resultRow];
+          setItems(synced);
+          persistAll(synced);
+        }
+
+        setSuccess("Saved Live to Supabase Cloud!");
+        setOpen(false);
+        setEditing(empty);
+        setPreview("");
+        compressedFileRef.current = null;
+        return;
+      }
+
+      // 2) Fallback to server route if Supabase browser client isn't configured
+      const fd = new FormData();
+      fd.set("name", editing.name ?? "");
+      fd.set("initials", editing.initials ?? "");
+      fd.set("website_url", editing.website_url ?? "");
+      fd.set("order_index", String(editing.order_index ?? 0));
+      if (file) fd.set("logo", file);
+
+      const url = editing.id && isUuid(editing.id) ? `/api/admin/partners/${editing.id}` : "/api/admin/partners";
+      const method = editing.id && isUuid(editing.id) ? "PATCH" : "POST";
       const res = await fetch(url, { method, body: fd });
       const data = (await res.json()) as { error?: string; partner?: PartnerRow };
       if (!res.ok) throw new Error(data.error || "Save failed.");
       if (data.partner) {
-        // Prefer the cloud-uploaded URL, but keep our local logo if the cloud omitted it
-        const serverPartner: PartnerRow = {
-          ...data.partner,
-          logo_url: data.partner.logo_url || logoUrl,
-        };
         const synced = editing.id
-          ? items.map((i) => (i.id === editing.id ? serverPartner : i))
-          : [...items, serverPartner];
+          ? items.map((i) => (i.id === editing.id ? data.partner! : i))
+          : [...items, data.partner];
         setItems(synced);
         persistAll(synced);
       }
+      setSuccess("Saved Live to Supabase Cloud!");
       setOpen(false);
       setEditing(empty);
       setPreview("");
       compressedFileRef.current = null;
-      if (fileRef.current) fileRef.current.value = "";
-      setSuccess("Saved Successfully!");
-    } catch {
-      setOpen(false);
-      setEditing(empty);
-      setPreview("");
-      compressedFileRef.current = null;
-      if (fileRef.current) fileRef.current.value = "";
-      setSuccess("Saved Successfully! (stored locally, cloud unavailable)");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Cloud write failed.";
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -165,16 +224,35 @@ export default function PartnersAdminPage() {
     if (!confirm("Delete this partner?")) return;
     setError("");
     setSuccess("");
-    const next = items.filter((i) => i.id !== id);
-    setItems(next);
-    persistAll(next);
+
+    const supabase = getBrowserSupabase();
+    if (supabase && isUuid(id)) {
+      try {
+        const { error: delError } = await supabase.from("partners").delete().eq("id", id);
+        if (delError) throw new Error(delError.message);
+        const next = items.filter((i) => i.id !== id);
+        setItems(next);
+        persistAll(next);
+        setSuccess("Saved Live to Supabase Cloud! (Deleted)");
+        return;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Cloud delete failed.";
+        setError(msg);
+        return;
+      }
+    }
+
     try {
-      const res = await fetch(`/api/admin/partners/${id}`, { cache: "no-store",  method: "DELETE" });
+      const res = await fetch(`/api/admin/partners/${id}`, { cache: "no-store", method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
-      setSuccess("Deleted successfully!");
-    } catch {
-      setSuccess("Removed locally.");
+      const next = items.filter((i) => i.id !== id);
+      setItems(next);
+      persistAll(next);
+      setSuccess("Saved Live to Supabase Cloud! (Deleted)");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Delete failed.";
+      setError(msg);
     }
   }
 
@@ -191,10 +269,14 @@ export default function PartnersAdminPage() {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 shadow-sm">
+          ⚠️ Cloud error: {error}
+        </div>
       )}
       {success && (
-        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</p>
+        <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-700 shadow-sm">
+          ✓ {success}
+        </div>
       )}
 
       {open && (
@@ -253,7 +335,7 @@ export default function PartnersAdminPage() {
               type="file"
               accept="image/*"
               onChange={handleFileChange}
-              required={!editing.id}
+              required={!editing.id && !preview}
               className="mt-1 w-full rounded-md border border-navy/15 bg-surface px-3 py-2.5 text-sm file:mr-3 file:rounded file:border-0 file:bg-action file:px-3 file:py-1 file:text-white"
             />
             {preview && (
@@ -271,7 +353,7 @@ export default function PartnersAdminPage() {
           </label>
           <div className="sm:col-span-2 flex gap-2">
             <button type="submit" className="btn-action" disabled={saving}>
-              {saving ? "Saving…" : editing.id ? "Update partner" : "Create partner"}
+              {saving ? "Saving Live to Cloud…" : editing.id ? "Update partner" : "Create partner"}
             </button>
             <button
               type="button"

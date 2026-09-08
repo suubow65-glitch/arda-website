@@ -12,6 +12,7 @@ import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import { mapActivity, slugify } from "@/lib/mappers";
 import { compressActivityPhoto } from "@/lib/imageCompressor";
 import { activities as mockActivities } from "@/data/mockData";
+import { getBrowserSupabase, uploadDirectFile } from "@/lib/supabaseBrowser";
 import type { ActivityRow } from "@/lib/types";
 
 const adminKey = "arda_admin_activities_list";
@@ -62,6 +63,10 @@ function persistActivities(rows: ActivityRow[]) {
   }
 }
 
+function isUuid(id: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 export default function ActivitiesAdminPage() {
   const [items, setItems] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,6 +84,38 @@ export default function ActivitiesAdminPage() {
 
   async function load() {
     setLoading(true);
+    const supabase = getBrowserSupabase();
+    if (supabase) {
+      try {
+        const { data, error: qErr } = await supabase
+          .from("activities")
+          .select("*")
+          .order("date", { ascending: false });
+        if (!qErr && data && data.length > 0) {
+          setItems(data as ActivityRow[]);
+          persistActivities(data as ActivityRow[]);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    try {
+      const res = await fetch("/api/admin/activities", { cache: "no-store" });
+      if (res.ok) {
+        const data = (await res.json()) as { activities: ActivityRow[] };
+        const list = data.activities?.length ? data.activities : defaultActivities;
+        setItems(list);
+        persistActivities(list);
+        setLoading(false);
+        return;
+      }
+    } catch {
+      // fallback
+    }
+
     const custom = getLocalItem<{
       userModified: boolean;
       activities: ActivityRow[];
@@ -96,19 +133,10 @@ export default function ActivitiesAdminPage() {
       setLoading(false);
       return;
     }
-    try {
-      const res = await fetch("/api/admin/activities", { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load activities.");
-      const data = (await res.json()) as { activities: ActivityRow[] };
-      const list = data.activities.length ? data.activities : defaultActivities;
-      setItems(list);
-      persistActivities(list);
-    } catch {
-      setItems(defaultActivities);
-      persistActivities(defaultActivities);
-    } finally {
-      setLoading(false);
-    }
+
+    setItems(defaultActivities);
+    persistActivities(defaultActivities);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -157,7 +185,6 @@ export default function ActivitiesAdminPage() {
     compressedFileRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     setOpen(false);
-    setError("");
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -166,59 +193,96 @@ export default function ActivitiesAdminPage() {
     setError("");
     setSuccess("");
 
-    const fd = new FormData();
-    fd.set("title", form.title);
-    fd.set("sector", form.sector);
-    fd.set("location", form.location);
-    fd.set("date", form.date);
-    fd.set("description", form.description);
-    fd.set("content", form.content || form.description);
-    fd.set("status", form.status);
-
     const file = compressedFileRef.current || fileRef.current?.files?.[0];
-    const imageUrl = preview || (editing ? editing.image_url : "");
-    if (file) fd.set("image", file);
-    if (editing && !file) fd.set("image_url", imageUrl);
-
-    const nextItem: ActivityRow = editing
-      ? {
-          ...editing,
-          ...form,
-          image_url: imageUrl,
-          slug: slugify(form.title),
-          status: form.status,
-          created_at: editing.created_at,
-        }
-      : {
-          ...form,
-          id: String(Date.now()),
-          slug: slugify(form.title),
-          image_url: imageUrl,
-          created_at: new Date().toISOString(),
-        };
-
-    const next = editing
-      ? items.map((i) => (i.id === editing.id ? nextItem : i))
-      : [nextItem, ...items];
-
-    const ordered = sortByDateDesc(next);
-    setItems(ordered);
-    persistActivities(ordered);
+    const supabase = getBrowserSupabase();
 
     try {
-      const url = editing
-        ? `/api/admin/activities/${editing.id}`
-        : "/api/admin/activities";
-      const method = editing ? "PATCH" : "POST";
+      let imageUrl = preview || (editing ? editing.image_url : "");
+
+      // 1) Direct Supabase Cloud write if configured
+      if (supabase) {
+        if (file) {
+          try {
+            imageUrl = await uploadDirectFile(supabase, "activity-images", file);
+          } catch (storageErr) {
+            console.warn("Storage upload failed, attempting fallback:", storageErr);
+          }
+        }
+
+        if (!imageUrl) {
+          throw new Error("An activity image is required.");
+        }
+
+        const title = form.title.trim();
+        const payload = {
+          title,
+          slug: slugify(title),
+          sector: form.sector,
+          location: form.location,
+          date: form.date,
+          image_url: imageUrl,
+          description: form.description,
+          content: form.content || form.description,
+          status: form.status,
+        };
+
+        let resultRow: ActivityRow | null = null;
+        if (editing && isUuid(editing.id)) {
+          const { data, error: updateError } = await supabase
+            .from("activities")
+            .update(payload)
+            .eq("id", editing.id)
+            .select("*")
+            .single();
+          if (updateError) throw new Error(updateError.message);
+          resultRow = data as ActivityRow;
+        } else {
+          const { data, error: insertError } = await supabase
+            .from("activities")
+            .insert(payload)
+            .select("*")
+            .single();
+          if (insertError) throw new Error(insertError.message);
+          resultRow = data as ActivityRow;
+        }
+
+        if (resultRow) {
+          const synced = editing
+            ? items.map((i) => (i.id === editing.id ? resultRow! : i))
+            : [resultRow, ...items];
+          setItems(synced);
+          persistActivities(synced);
+        }
+
+        setSuccess("Saved Live to Supabase Cloud!");
+        reset();
+        return;
+      }
+
+      // 2) Serverless fallback
+      const fd = new FormData();
+      fd.set("title", form.title);
+      fd.set("sector", form.sector);
+      fd.set("location", form.location);
+      fd.set("date", form.date);
+      fd.set("description", form.description);
+      fd.set("content", form.content || form.description);
+      fd.set("status", form.status);
+      if (file) fd.set("image", file);
+      if (editing && !file) fd.set("image_url", imageUrl);
+
+      const isEditingCloud = editing && isUuid(editing.id);
+      const url = isEditingCloud ? `/api/admin/activities/${editing.id}` : "/api/admin/activities";
+      const method = isEditingCloud ? "PATCH" : "POST";
       const res = await fetch(url, { method, body: fd });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Save failed.");
       await load();
       reset();
-      setSuccess("Saved Successfully!");
-    } catch {
-      setSuccess("Saved Successfully!");
-      reset();
+      setSuccess("Saved Live to Supabase Cloud!");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Cloud write failed.";
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -228,17 +292,35 @@ export default function ActivitiesAdminPage() {
     if (!confirm("Delete this activity?")) return;
     setError("");
     setSuccess("");
-    const next = items.filter((i) => i.id !== id);
-    const ordered = sortByDateDesc(next);
-    setItems(ordered);
-    persistActivities(ordered);
+
+    const supabase = getBrowserSupabase();
+    if (supabase && isUuid(id)) {
+      try {
+        const { error: delErr } = await supabase.from("activities").delete().eq("id", id);
+        if (delErr) throw new Error(delErr.message);
+        const next = items.filter((i) => i.id !== id);
+        setItems(next);
+        persistActivities(next);
+        setSuccess("Saved Live to Supabase Cloud! (Deleted)");
+        return;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Delete failed.";
+        setError(msg);
+        return;
+      }
+    }
+
     try {
-      const res = await fetch(`/api/admin/activities/${id}`, { cache: "no-store",  method: "DELETE" });
+      const res = await fetch(`/api/admin/activities/${id}`, { cache: "no-store", method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
-      await load();
-    } catch {
-      setSuccess("Saved Successfully!");
+      const next = items.filter((i) => i.id !== id);
+      setItems(next);
+      persistActivities(next);
+      setSuccess("Saved Live to Supabase Cloud! (Deleted)");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Delete failed.";
+      setError(msg);
     }
   }
 
@@ -257,14 +339,14 @@ export default function ActivitiesAdminPage() {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </p>
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 shadow-sm">
+          ⚠️ Cloud error: {error}
+        </div>
       )}
       {success && (
-        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
-          {success}
-        </p>
+        <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-700 shadow-sm">
+          ✓ {success}
+        </div>
       )}
 
       {open && (
@@ -347,7 +429,7 @@ export default function ActivitiesAdminPage() {
               type="file"
               accept="image/*"
               onChange={handleFileChange}
-              required={!editing}
+              required={!editing && !preview}
               className="mt-1 w-full rounded-md border border-navy/15 bg-surface px-3 py-2.5 text-sm file:mr-3 file:rounded file:border-0 file:bg-action file:px-3 file:py-1 file:text-white"
             />
             {preview && (
@@ -384,7 +466,7 @@ export default function ActivitiesAdminPage() {
           </label>
           <div className="sm:col-span-2 flex gap-2">
             <button type="submit" className="btn-action" disabled={saving}>
-              {saving ? "Saving…" : editing ? "Update activity" : "Create activity"}
+              {saving ? "Saving Live to Cloud…" : editing ? "Update activity" : "Create activity"}
             </button>
             <button
               type="button"

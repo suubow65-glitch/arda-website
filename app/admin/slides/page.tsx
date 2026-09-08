@@ -5,6 +5,7 @@ import { Eye, EyeOff, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { getLocalItem, storageKeys } from "@/lib/storage";
 import { compressHeroBanner } from "@/lib/imageCompressor";
 import { heroSlides } from "@/data/mockData";
+import { getBrowserSupabase, uploadDirectFile } from "@/lib/supabaseBrowser";
 import type { SlideRow } from "@/lib/types";
 
 const adminKey = "arda_admin_slides_list";
@@ -76,9 +77,39 @@ export default function SlidesAdminPage() {
 
   async function load() {
     setLoading(true);
-    const custom = getLocalItem<{ userModified: boolean; slides: SlideRow[] }>(
-      customKey
-    );
+    const supabase = getBrowserSupabase();
+    if (supabase) {
+      try {
+        const { data, error: qErr } = await supabase
+          .from("slides")
+          .select("*")
+          .order("order_index", { ascending: true });
+        if (!qErr && data && data.length > 0) {
+          setItems(data as SlideRow[]);
+          persistSlides(data as SlideRow[]);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    try {
+      const res = await fetch("/api/admin/slides", { cache: "no-store" });
+      if (res.ok) {
+        const data = (await res.json()) as { slides: SlideRow[] };
+        const list = data.slides?.length ? data.slides : defaultSlides;
+        setItems(list);
+        persistSlides(list);
+        setLoading(false);
+        return;
+      }
+    } catch {
+      // fallback
+    }
+
+    const custom = getLocalItem<{ userModified: boolean; slides: SlideRow[] }>(customKey);
     if (custom?.userModified && custom.slides?.length) {
       setItems(custom.slides);
       persistSlides(custom.slides);
@@ -92,19 +123,10 @@ export default function SlidesAdminPage() {
       setLoading(false);
       return;
     }
-    try {
-      const res = await fetch("/api/admin/slides", { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load slides.");
-      const data = (await res.json()) as { slides: SlideRow[] };
-      const list = data.slides.length ? data.slides : defaultSlides;
-      setItems(list);
-      persistSlides(list);
-    } catch {
-      setItems(defaultSlides);
-      persistSlides(defaultSlides);
-    } finally {
-      setLoading(false);
-    }
+
+    setItems(defaultSlides);
+    persistSlides(defaultSlides);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -153,7 +175,6 @@ export default function SlidesAdminPage() {
     compressedFileRef.current = null;
     if (fileRef.current) fileRef.current.value = "";
     setOpen(false);
-    setError("");
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -162,63 +183,100 @@ export default function SlidesAdminPage() {
     setError("");
     setSuccess("");
 
-    const fd = new FormData();
-    fd.set("title", form.title);
-    fd.set("category", form.category);
-    fd.set("description", form.description);
-    fd.set("button_text", form.button_text);
-    fd.set("button_link", form.button_link);
-    fd.set("order_index", String(form.order_index));
-    fd.set("active", form.active ? "true" : "false");
-
     const file = compressedFileRef.current || fileRef.current?.files?.[0];
-    const imageUrl = preview || (editing ? editing.image_url : "");
-    fd.set("image_url", imageUrl);
-    if (file) fd.set("image", file);
-
-    const nextItem: SlideRow = editing
-      ? {
-          ...editing,
-          ...form,
-          image_url: imageUrl,
-          created_at: editing.created_at,
-        }
-      : {
-          ...form,
-          id: String(Date.now()),
-          image_url: imageUrl,
-          created_at: new Date().toISOString(),
-        };
-
-    const next = editing
-      ? items.map((i) => (i.id === editing.id ? nextItem : i))
-      : [...items, nextItem];
-
-    setItems(next);
-    persistSlides(next);
+    const supabase = getBrowserSupabase();
 
     try {
+      let imageUrl = preview || (editing ? editing.image_url : "");
+
+      // 1) Direct Supabase Cloud write if configured
+      if (supabase) {
+        if (file) {
+          try {
+            imageUrl = await uploadDirectFile(supabase, "slide-images", file);
+          } catch (storageErr) {
+            console.warn("Storage upload failed, attempting fallback:", storageErr);
+          }
+        }
+
+        if (!imageUrl) {
+          throw new Error("A banner image is required.");
+        }
+
+        const payload = {
+          title: form.title,
+          category: form.category,
+          description: form.description,
+          button_text: form.button_text || null,
+          button_link: form.button_link || null,
+          order_index: Number(form.order_index),
+          active: Boolean(form.active),
+          image_url: imageUrl,
+        };
+
+        let resultRow: SlideRow | null = null;
+        if (editing && isUuid(editing.id)) {
+          const { data, error: updateError } = await supabase
+            .from("slides")
+            .update(payload)
+            .eq("id", editing.id)
+            .select("*")
+            .single();
+          if (updateError) throw new Error(updateError.message);
+          resultRow = data as SlideRow;
+        } else {
+          const { data, error: insertError } = await supabase
+            .from("slides")
+            .insert(payload)
+            .select("*")
+            .single();
+          if (insertError) throw new Error(insertError.message);
+          resultRow = data as SlideRow;
+        }
+
+        if (resultRow) {
+          const synced = editing
+            ? items.map((i) => (i.id === editing.id ? resultRow! : i))
+            : [...items, resultRow];
+          setItems(synced);
+          persistSlides(synced);
+        }
+
+        setSuccess("Saved Live to Supabase Cloud!");
+        reset();
+        return;
+      }
+
+      // 2) Serverless fallback
+      const fd = new FormData();
+      fd.set("title", form.title);
+      fd.set("category", form.category);
+      fd.set("description", form.description);
+      fd.set("button_text", form.button_text);
+      fd.set("button_link", form.button_link);
+      fd.set("order_index", String(form.order_index));
+      fd.set("active", form.active ? "true" : "false");
+      fd.set("image_url", imageUrl);
+      if (file) fd.set("image", file);
+
       const isEditingCloud = editing && isUuid(editing.id);
-      const url = isEditingCloud
-        ? `/api/admin/slides/${editing.id}`
-        : "/api/admin/slides";
+      const url = isEditingCloud ? `/api/admin/slides/${editing.id}` : "/api/admin/slides";
       const method = isEditingCloud ? "PATCH" : "POST";
       const res = await fetch(url, { method, body: fd });
       const data = (await res.json()) as { error?: string; slide?: SlideRow };
       if (!res.ok) throw new Error(data.error || "Save failed.");
       if (data.slide) {
-        const serverSlide = data.slide;
-        const targetId = editing ? editing.id : nextItem.id;
-        const withServer = next.map((i) =>
-          i.id === targetId ? serverSlide : i
-        );
-        setItems(withServer);
-        persistSlides(withServer);
+        const synced = editing
+          ? items.map((i) => (i.id === editing.id ? data.slide! : i))
+          : [...items, data.slide];
+        setItems(synced);
+        persistSlides(synced);
       }
+      setSuccess("Saved Live to Supabase Cloud!");
       reset();
-    } catch {
-      setSuccess("Saved Successfully!");
-      reset();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Cloud write failed.";
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -227,24 +285,39 @@ export default function SlidesAdminPage() {
   async function toggleActive(id: string) {
     setError("");
     setSuccess("");
-    const next = items.map((i) =>
-      i.id === id ? { ...i, active: !i.active } : i
-    );
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+
+    const newActive = !item.active;
+    const next = items.map((i) => (i.id === id ? { ...i, active: newActive } : i));
     setItems(next);
     persistSlides(next);
 
-    const item = next.find((i) => i.id === id);
-    if (!item) return;
+    const supabase = getBrowserSupabase();
+    if (supabase && isUuid(id)) {
+      try {
+        const { error: updErr } = await supabase
+          .from("slides")
+          .update({ active: newActive })
+          .eq("id", id);
+        if (updErr) throw new Error(updErr.message);
+        setSuccess("Saved Live to Supabase Cloud!");
+        return;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Update failed.";
+        setError(msg);
+        return;
+      }
+    }
+
     const fd = new FormData();
-    fd.set("active", item.active ? "true" : "false");
+    fd.set("active", newActive ? "true" : "false");
     try {
-      const res = await fetch(`/api/admin/slides/${id}`, { cache: "no-store", 
-        method: "PATCH",
-        body: fd,
-      });
+      const res = await fetch(`/api/admin/slides/${id}`, { method: "PATCH", body: fd });
       if (!res.ok) throw new Error("Update failed.");
+      setSuccess("Saved Live to Supabase Cloud!");
     } catch {
-      setSuccess("Saved Successfully!");
+      setSuccess("Updated locally.");
     }
   }
 
@@ -252,15 +325,35 @@ export default function SlidesAdminPage() {
     if (!confirm("Delete this slide?")) return;
     setError("");
     setSuccess("");
-    const next = items.filter((i) => i.id !== id);
-    setItems(next);
-    persistSlides(next);
+
+    const supabase = getBrowserSupabase();
+    if (supabase && isUuid(id)) {
+      try {
+        const { error: delErr } = await supabase.from("slides").delete().eq("id", id);
+        if (delErr) throw new Error(delErr.message);
+        const next = items.filter((i) => i.id !== id);
+        setItems(next);
+        persistSlides(next);
+        setSuccess("Saved Live to Supabase Cloud! (Deleted)");
+        return;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Delete failed.";
+        setError(msg);
+        return;
+      }
+    }
+
     try {
-      const res = await fetch(`/api/admin/slides/${id}`, { cache: "no-store",  method: "DELETE" });
+      const res = await fetch(`/api/admin/slides/${id}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
-    } catch {
-      setSuccess("Saved Successfully!");
+      const next = items.filter((i) => i.id !== id);
+      setItems(next);
+      persistSlides(next);
+      setSuccess("Saved Live to Supabase Cloud! (Deleted)");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Delete failed.";
+      setError(msg);
     }
   }
 
@@ -277,14 +370,14 @@ export default function SlidesAdminPage() {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </p>
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 shadow-sm">
+          ⚠️ Cloud error: {error}
+        </div>
       )}
       {success && (
-        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
-          {success}
-        </p>
+        <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-700 shadow-sm">
+          ✓ {success}
+        </div>
       )}
 
       {open && (
@@ -348,7 +441,7 @@ export default function SlidesAdminPage() {
               type="file"
               accept="image/*"
               onChange={handleFileChange}
-              required={!editing}
+              required={!editing && !preview}
               className="mt-1 w-full rounded-md border border-navy/15 bg-surface px-3 py-2.5 text-sm file:mr-3 file:rounded file:border-0 file:bg-action file:px-3 file:py-1 file:text-white"
             />
             {preview && (
@@ -395,7 +488,7 @@ export default function SlidesAdminPage() {
           </label>
           <div className="sm:col-span-2 flex gap-2">
             <button type="submit" className="btn-action" disabled={saving}>
-              {saving ? "Saving…" : editing ? "Update slide" : "Create slide"}
+              {saving ? "Saving Live to Cloud…" : editing ? "Update slide" : "Create slide"}
             </button>
             <button
               type="button"

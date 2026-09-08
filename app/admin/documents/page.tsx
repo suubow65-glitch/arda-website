@@ -1,17 +1,32 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Download, Loader2, Plus, Trash2 } from "lucide-react";
+import { Download, FileText, Loader2, Plus, Trash2 } from "lucide-react";
 import { DOCUMENT_CATEGORIES } from "@/lib/constants";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
-import { mapDocument } from "@/lib/mappers";
+import { formatBytes, mapDocument } from "@/lib/mappers";
+import { documents as mockDocuments } from "@/data/mockData";
+import { getBrowserSupabase, uploadDirectFile } from "@/lib/supabaseBrowser";
 import type { DocumentRow } from "@/lib/types";
 
 const adminKey = "arda_admin_documents_list";
 
-const currentYear = new Date().getFullYear();
+const defaultDocuments: DocumentRow[] = mockDocuments.map((d) => ({
+  id: d.id,
+  title: d.title,
+  category: d.type,
+  year: d.year,
+  file_url: d.href,
+  file_size: d.size,
+  created_at: new Date().toISOString(),
+}));
+
+function isUuid(id: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
 
 export default function DocumentsAdminPage() {
+  const currentYear = new Date().getFullYear();
   const [items, setItems] = useState<DocumentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,24 +42,44 @@ export default function DocumentsAdminPage() {
 
   async function load() {
     setLoading(true);
-    const saved = getLocalItem<DocumentRow[]>(adminKey);
-    if (saved) {
-      setItems(saved);
-      setLoading(false);
-      return;
+    const supabase = getBrowserSupabase();
+    if (supabase) {
+      try {
+        const { data, error: qErr } = await supabase
+          .from("documents")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (!qErr && data && data.length > 0) {
+          setItems(data as DocumentRow[]);
+          setLocalItem(adminKey, data);
+          setLocalItem(storageKeys.documents, (data as DocumentRow[]).map(mapDocument));
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // fallback
+      }
     }
+
     try {
       const res = await fetch("/api/admin/documents", { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load documents.");
-      const data = (await res.json()) as { documents: DocumentRow[] };
-      setItems(data.documents);
-      setLocalItem(adminKey, data.documents);
-      setLocalItem(storageKeys.documents, data.documents.map(mapDocument));
+      if (res.ok) {
+        const data = (await res.json()) as { documents: DocumentRow[] };
+        const list = data.documents?.length ? data.documents : defaultDocuments;
+        setItems(list);
+        setLocalItem(adminKey, list);
+        setLocalItem(storageKeys.documents, list.map(mapDocument));
+        setLoading(false);
+        return;
+      }
     } catch {
-      // keep local state/empty
-    } finally {
-      setLoading(false);
+      // fallback
     }
+
+    const saved = getLocalItem<DocumentRow[]>(adminKey);
+    const list = saved?.length ? saved : defaultDocuments;
+    setItems(list);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -55,7 +90,6 @@ export default function DocumentsAdminPage() {
     setForm({ title: "", category: "", year: String(currentYear) });
     if (fileRef.current) fileRef.current.value = "";
     setOpen(false);
-    setError("");
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -64,33 +98,69 @@ export default function DocumentsAdminPage() {
     setError("");
     setSuccess("");
 
-    const fd = new FormData();
-    fd.set("title", form.title);
-    fd.set("category", form.category);
-    fd.set("year", form.year);
     const file = fileRef.current?.files?.[0];
-    if (file) fd.set("file", file);
-
-    const newRow = {
-      ...form,
-      id: String(Date.now()),
-      file_url: file ? file.name : "",
-      file_size: "",
-      created_at: new Date().toISOString(),
-    } as DocumentRow;
-    const next = [...items, newRow];
-    setItems(next);
-    setLocalItem(adminKey, next);
-    setLocalItem(storageKeys.documents, next.map(mapDocument));
+    const supabase = getBrowserSupabase();
 
     try {
-      const res = await fetch("/api/admin/documents", { cache: "no-store",  method: "POST", body: fd });
+      if (!file) {
+        throw new Error("A PDF file is required.");
+      }
+
+      // 1) Direct Supabase Cloud write if configured
+      if (supabase) {
+        let fileUrl = "";
+        try {
+          fileUrl = await uploadDirectFile(supabase, "pdf-documents", file);
+        } catch (storageErr) {
+          console.warn("Storage upload failed, attempting fallback:", storageErr);
+        }
+
+        if (!fileUrl) {
+          throw new Error("Failed to upload PDF file to storage.");
+        }
+
+        const payload = {
+          title: form.title.trim(),
+          category: form.category,
+          year: form.year,
+          file_url: fileUrl,
+          file_size: formatBytes(file.size),
+        };
+
+        const { data, error: insertError } = await supabase
+          .from("documents")
+          .insert(payload)
+          .select("*")
+          .single();
+        if (insertError) throw new Error(insertError.message);
+
+        const newRow = data as DocumentRow;
+        const next = [newRow, ...items];
+        setItems(next);
+        setLocalItem(adminKey, next);
+        setLocalItem(storageKeys.documents, next.map(mapDocument));
+
+        setSuccess("Saved Live to Supabase Cloud!");
+        reset();
+        return;
+      }
+
+      // 2) Serverless fallback
+      const fd = new FormData();
+      fd.set("title", form.title);
+      fd.set("category", form.category);
+      fd.set("year", form.year);
+      fd.set("file", file);
+
+      const res = await fetch("/api/admin/documents", { cache: "no-store", method: "POST", body: fd });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Upload failed.");
       await load();
       reset();
-    } catch {
-      setSuccess("Saved Successfully!");
+      setSuccess("Saved Live to Supabase Cloud!");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Cloud write failed.";
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -100,17 +170,37 @@ export default function DocumentsAdminPage() {
     if (!confirm("Delete this document?")) return;
     setError("");
     setSuccess("");
-    const next = items.filter((i) => i.id !== id);
-    setItems(next);
-    setLocalItem(adminKey, next);
-    setLocalItem(storageKeys.documents, next.map(mapDocument));
+
+    const supabase = getBrowserSupabase();
+    if (supabase && isUuid(id)) {
+      try {
+        const { error: delErr } = await supabase.from("documents").delete().eq("id", id);
+        if (delErr) throw new Error(delErr.message);
+        const next = items.filter((i) => i.id !== id);
+        setItems(next);
+        setLocalItem(adminKey, next);
+        setLocalItem(storageKeys.documents, next.map(mapDocument));
+        setSuccess("Saved Live to Supabase Cloud! (Deleted)");
+        return;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Delete failed.";
+        setError(msg);
+        return;
+      }
+    }
+
     try {
-      const res = await fetch(`/api/admin/documents/${id}`, { cache: "no-store",  method: "DELETE" });
+      const res = await fetch(`/api/admin/documents/${id}`, { cache: "no-store", method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
-      await load();
-    } catch {
-      setSuccess("Saved Successfully!");
+      const next = items.filter((i) => i.id !== id);
+      setItems(next);
+      setLocalItem(adminKey, next);
+      setLocalItem(storageKeys.documents, next.map(mapDocument));
+      setSuccess("Saved Live to Supabase Cloud! (Deleted)");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Delete failed.";
+      setError(msg);
     }
   }
 
@@ -130,14 +220,14 @@ export default function DocumentsAdminPage() {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </p>
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 shadow-sm">
+          ⚠️ Cloud error: {error}
+        </div>
       )}
       {success && (
-        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
-          {success}
-        </p>
+        <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-700 shadow-sm">
+          ✓ {success}
+        </div>
       )}
 
       {open && (
@@ -181,18 +271,18 @@ export default function DocumentsAdminPage() {
             />
           </label>
           <label className="block text-sm font-semibold sm:col-span-2">
-            PDF file
+            PDF File
             <input
               ref={fileRef}
+              required
               type="file"
               accept="application/pdf"
-              required
               className="mt-1 w-full rounded-md border border-navy/15 bg-surface px-3 py-2.5 text-sm file:mr-3 file:rounded file:border-0 file:bg-action file:px-3 file:py-1 file:text-white"
             />
           </label>
           <div className="sm:col-span-2 flex gap-2">
             <button type="submit" className="btn-action" disabled={saving}>
-              {saving ? "Uploading…" : "Upload document"}
+              {saving ? "Uploading Live to Cloud…" : "Save Document"}
             </button>
             <button
               type="button"
@@ -223,22 +313,38 @@ export default function DocumentsAdminPage() {
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id} className="border-b border-navy/10 last:border-0">
-                  <td className="px-4 py-3 font-semibold text-navy">{item.title}</td>
-                  <td className="px-4 py-3">{item.category}</td>
+                <tr
+                  key={item.id}
+                  className="border-b border-navy/10 last:border-0"
+                >
+                  <td className="px-4 py-3 font-semibold text-navy">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-action" />
+                      {item.title}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="rounded-full bg-navy/10 px-2.5 py-1 text-xs font-semibold text-navy">
+                      {item.category}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">{item.year}</td>
-                  <td className="px-4 py-3">{item.file_size || "-"}</td>
+                  <td className="px-4 py-3 text-navy/70">
+                    {item.file_size || "—"}
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-2">
-                      <a
-                        href={item.file_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-md border border-navy/10 p-2 text-navy hover:bg-surface"
-                        aria-label="Download"
-                      >
-                        <Download className="h-4 w-4" />
-                      </a>
+                      {item.file_url && (
+                        <a
+                          href={item.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-md border border-navy/10 p-2 text-navy hover:bg-surface"
+                          aria-label="Download"
+                        >
+                          <Download className="h-4 w-4" />
+                        </a>
+                      )}
                       <button
                         type="button"
                         onClick={() => remove(item.id)}

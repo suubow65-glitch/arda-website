@@ -5,6 +5,7 @@ import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import { mapTeamMember } from "@/lib/mappers";
 import { compressTeamPhoto } from "@/lib/imageCompressor";
+import { getBrowserSupabase, uploadDirectFile } from "@/lib/supabaseBrowser";
 import type { TeamMemberRow } from "@/lib/types";
 
 const empty = {
@@ -26,6 +27,10 @@ function persistAll(rows: TeamMemberRow[]) {
   window.dispatchEvent(new Event("arda-team-updated"));
 }
 
+function isUuid(id: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 export default function TeamAdminPage() {
   const [items, setItems] = useState<TeamMemberRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,19 +45,38 @@ export default function TeamAdminPage() {
 
   async function load() {
     setLoading(true);
+    const supabase = getBrowserSupabase();
+    if (supabase) {
+      try {
+        const { data, error: qErr } = await supabase
+          .from("team_members")
+          .select("*")
+          .order("order_index", { ascending: true });
+        if (!qErr && data && data.length > 0) {
+          setItems(data as TeamMemberRow[]);
+          persistAll(data as TeamMemberRow[]);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // fallback
+      }
+    }
+
     try {
       const res = await fetch("/api/admin/team", { cache: "no-store" });
       if (res.ok) {
         const data = (await res.json()) as { team: TeamMemberRow[] };
-        const list = data.team.length ? data.team : getLocalItem<TeamMemberRow[]>(adminKey) || [];
+        const list = data.team?.length ? data.team : getLocalItem<TeamMemberRow[]>(adminKey) || [];
         setItems(list);
         persistAll(list);
         setLoading(false);
         return;
       }
     } catch {
-      // ignore
+      // fallback
     }
+
     const saved =
       getLocalItem<TeamMemberRow[]>(adminKey) ||
       getLocalItem<{ userModified: boolean; team: TeamMemberRow[] }>(customKey)?.team ||
@@ -97,57 +121,97 @@ export default function TeamAdminPage() {
     setError("");
     setSuccess("");
 
-    const fd = new FormData();
-    fd.set("name", editing.name ?? "");
-    fd.set("role", editing.role ?? "");
-    fd.set("category", editing.category ?? "executive");
-    fd.set("bio", editing.bio ?? "");
-    fd.set("order_index", String(editing.order_index ?? 0));
     const file = compressedFileRef.current || fileRef.current?.files?.[0];
-    if (file) fd.set("image", file);
-
-    const imageUrl = preview || (editing.id ? editing.image_url || "" : "");
-    const tempId = editing.id || String(Date.now());
-    const nextItem: TeamMemberRow = editing.id
-      ? ({ ...(items.find((i) => i.id === editing.id) as TeamMemberRow), ...editing, image_url: imageUrl } as TeamMemberRow)
-      : ({ ...empty, ...editing, id: tempId, image_url: imageUrl, created_at: new Date().toISOString() } as TeamMemberRow);
-
-    const next = editing.id
-      ? items.map((i) => (i.id === editing.id ? nextItem : i))
-      : [...items, nextItem];
-    setItems(next);
-    persistAll(next);
+    const supabase = getBrowserSupabase();
 
     try {
-      const url = editing.id ? `/api/admin/team/${editing.id}` : "/api/admin/team";
-      const method = editing.id ? "PATCH" : "POST";
+      let imageUrl = preview || (editing.id ? editing.image_url || "" : "");
+
+      // 1) Direct Supabase Cloud write if configured
+      if (supabase) {
+        if (file) {
+          try {
+            imageUrl = await uploadDirectFile(supabase, "team-photos", file);
+          } catch (storageErr) {
+            console.warn("Storage upload failed, attempting fallback:", storageErr);
+          }
+        }
+
+        const payload = {
+          name: editing.name ?? "",
+          role: editing.role ?? "",
+          category: editing.category ?? "executive",
+          bio: editing.bio ?? "",
+          order_index: Number(editing.order_index ?? 0),
+          image_url: imageUrl || null,
+        };
+
+        let resultRow: TeamMemberRow | null = null;
+        if (editing.id && isUuid(editing.id)) {
+          const { data, error: updateError } = await supabase
+            .from("team_members")
+            .update(payload)
+            .eq("id", editing.id)
+            .select("*")
+            .single();
+          if (updateError) throw new Error(updateError.message);
+          resultRow = data as TeamMemberRow;
+        } else {
+          const { data, error: insertError } = await supabase
+            .from("team_members")
+            .insert(payload)
+            .select("*")
+            .single();
+          if (insertError) throw new Error(insertError.message);
+          resultRow = data as TeamMemberRow;
+        }
+
+        if (resultRow) {
+          const synced = editing.id
+            ? items.map((i) => (i.id === editing.id ? resultRow! : i))
+            : [...items, resultRow];
+          setItems(synced);
+          persistAll(synced);
+        }
+
+        setSuccess("Saved Live to Supabase Cloud!");
+        setOpen(false);
+        setEditing(empty);
+        setPreview("");
+        compressedFileRef.current = null;
+        return;
+      }
+
+      // 2) Serverless route fallback
+      const fd = new FormData();
+      fd.set("name", editing.name ?? "");
+      fd.set("role", editing.role ?? "");
+      fd.set("category", editing.category ?? "executive");
+      fd.set("bio", editing.bio ?? "");
+      fd.set("order_index", String(editing.order_index ?? 0));
+      if (file) fd.set("image", file);
+
+      const isEditingCloud = editing.id && isUuid(editing.id);
+      const url = isEditingCloud ? `/api/admin/team/${editing.id}` : "/api/admin/team";
+      const method = isEditingCloud ? "PATCH" : "POST";
       const res = await fetch(url, { method, body: fd });
       const data = (await res.json()) as { error?: string; member?: TeamMemberRow };
       if (!res.ok) throw new Error(data.error || "Save failed.");
       if (data.member) {
-        const serverMember: TeamMemberRow = {
-          ...data.member,
-          image_url: data.member.image_url || imageUrl,
-        };
         const synced = editing.id
-          ? items.map((i) => (i.id === editing.id ? serverMember : i))
-          : [...items, serverMember];
+          ? items.map((i) => (i.id === editing.id ? data.member! : i))
+          : [...items, data.member];
         setItems(synced);
         persistAll(synced);
       }
+      setSuccess("Saved Live to Supabase Cloud!");
       setOpen(false);
       setEditing(empty);
       setPreview("");
       compressedFileRef.current = null;
-      if (fileRef.current) fileRef.current.value = "";
-      setSuccess("Saved Successfully!");
-    } catch {
-      setOpen(false);
-      setEditing(empty);
-      setPreview("");
-      compressedFileRef.current = null;
-      if (fileRef.current) fileRef.current.value = "";
-      setSuccess("Saved Successfully! (stored locally, cloud unavailable)");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Cloud write failed.";
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -157,16 +221,35 @@ export default function TeamAdminPage() {
     if (!confirm("Delete this member?")) return;
     setError("");
     setSuccess("");
-    const next = items.filter((i) => i.id !== id);
-    setItems(next);
-    persistAll(next);
+
+    const supabase = getBrowserSupabase();
+    if (supabase && isUuid(id)) {
+      try {
+        const { error: delErr } = await supabase.from("team_members").delete().eq("id", id);
+        if (delErr) throw new Error(delErr.message);
+        const next = items.filter((i) => i.id !== id);
+        setItems(next);
+        persistAll(next);
+        setSuccess("Saved Live to Supabase Cloud! (Deleted)");
+        return;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Delete failed.";
+        setError(msg);
+        return;
+      }
+    }
+
     try {
-      const res = await fetch(`/api/admin/team/${id}`, { cache: "no-store",  method: "DELETE" });
+      const res = await fetch(`/api/admin/team/${id}`, { cache: "no-store", method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
-      setSuccess("Saved Successfully!");
-    } catch {
-      setSuccess("Saved Successfully! (removed locally)");
+      const next = items.filter((i) => i.id !== id);
+      setItems(next);
+      persistAll(next);
+      setSuccess("Saved Live to Supabase Cloud! (Deleted)");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Delete failed.";
+      setError(msg);
     }
   }
 
@@ -183,14 +266,14 @@ export default function TeamAdminPage() {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </p>
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 shadow-sm">
+          ⚠️ Cloud error: {error}
+        </div>
       )}
       {success && (
-        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
-          {success}
-        </p>
+        <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-700 shadow-sm">
+          ✓ {success}
+        </div>
       )}
 
       {open && (
@@ -267,7 +350,7 @@ export default function TeamAdminPage() {
               type="file"
               accept="image/*"
               onChange={handleFileChange}
-              required={!editing.id}
+              required={!editing.id && !preview}
               className="mt-1 w-full rounded-md border border-navy/15 bg-surface px-3 py-2.5 text-sm file:mr-3 file:rounded file:border-0 file:bg-action file:px-3 file:py-1 file:text-white"
             />
             {preview && (
@@ -285,7 +368,7 @@ export default function TeamAdminPage() {
           </label>
           <div className="sm:col-span-2 flex gap-2">
             <button type="submit" className="btn-action" disabled={saving}>
-              {saving ? "Saving…" : editing.id ? "Update member" : "Create member"}
+              {saving ? "Saving Live to Cloud…" : editing.id ? "Update member" : "Create member"}
             </button>
             <button
               type="button"
