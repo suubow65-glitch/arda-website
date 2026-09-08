@@ -1,4 +1,7 @@
+export const revalidate = 0;
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
+import { noStoreJson } from "@/lib/apiCache";
 import {
   createSessionToken,
   getAdminCredentials,

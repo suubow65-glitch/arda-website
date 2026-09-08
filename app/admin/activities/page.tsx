@@ -10,7 +10,7 @@ import {
 } from "@/lib/constants";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import { mapActivity, slugify } from "@/lib/mappers";
-import { compressImageFile } from "@/lib/imageCompressor";
+import { compressActivityPhoto } from "@/lib/imageCompressor";
 import { activities as mockActivities } from "@/data/mockData";
 import type { ActivityRow } from "@/lib/types";
 
@@ -118,7 +118,7 @@ export default function ActivitiesAdminPage() {
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const compressed = await compressImageFile(file);
+    const compressed = await compressActivityPhoto(file);
     compressedFileRef.current = compressed;
     const reader = new FileReader();
     reader.onloadend = () => setPreview(reader.result as string);

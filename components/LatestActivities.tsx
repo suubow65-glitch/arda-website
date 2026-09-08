@@ -1,9 +1,36 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getLatestActivities } from "@/lib/content";
+import type { Activity } from "@/data/mockData";
+import { mapActivity } from "@/lib/mappers";
 import ActivityCard from "@/components/ActivityCard";
 
-export default async function LatestActivities() {
-  const activities = await getLatestActivities(3);
+export default function LatestActivities() {
+  const [activities, setActivities] = useState<Activity[]>([]);
+
+  useEffect(() => {
+    fetch("/api/admin/activities", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const data = (await res.json()) as { activities?: unknown[] };
+        if (data.activities) {
+          const mapped = data.activities
+            .map((a) =>
+              mapActivity(a as Parameters<typeof mapActivity>[0])
+            )
+            .sort(
+              (a, b) =>
+                new Date(b.date).getTime() - new Date(a.date).getTime()
+            )
+            .slice(0, 3);
+          setActivities(mapped);
+        }
+      })
+      .catch(() => {
+        // No-op; component will remain empty rather than crash.
+      });
+  }, []);
 
   return (
     <div>

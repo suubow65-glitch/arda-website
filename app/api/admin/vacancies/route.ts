@@ -74,11 +74,11 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (insertError) {
-      return noStoreJson({ error: insertError.message }, { status: 400 });
+      return noStoreJson({ error: insertError.message, success: false }, { status: 500 });
     }
     return noStoreJson({ vacancy: data as VacancyRow });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Save failed.";
-    return noStoreJson({ error: message }, { status: 500 });
+    return noStoreJson({ error: message, success: false }, { status: 500 });
   }
 }

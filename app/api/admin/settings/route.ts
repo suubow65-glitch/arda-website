@@ -80,11 +80,11 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (upsertError) {
-      return noStoreJson({ error: upsertError.message }, { status: 400 });
+      return noStoreJson({ error: upsertError.message, success: false }, { status: 500 });
     }
     return noStoreJson({ settings: data as SiteSettingsRow });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Save failed.";
-    return noStoreJson({ error: message }, { status: 500 });
+    return noStoreJson({ error: message, success: false }, { status: 500 });
   }
 }

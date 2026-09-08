@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import { mapPartner } from "@/lib/mappers";
-import { compressImageFile } from "@/lib/imageCompressor";
+import { compressPartnerLogo } from "@/lib/imageCompressor";
 import { partners as mockPartners } from "@/data/mockData";
 import type { PartnerRow } from "@/lib/types";
 
@@ -90,7 +90,7 @@ export default function PartnersAdminPage() {
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const compressed = await compressImageFile(file);
+    const compressed = await compressPartnerLogo(file);
     compressedFileRef.current = compressed;
     const reader = new FileReader();
     reader.onloadend = () => setPreview(reader.result as string);

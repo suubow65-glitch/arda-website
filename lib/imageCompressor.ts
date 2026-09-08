@@ -1,24 +1,39 @@
 "use client";
 
-const MAX_BYTES = 80 * 1024; // 80KB hard cap
+export interface CompressOptions {
+  maxWidth?: number;
+  quality?: number;
+  maxBytes?: number;
+  preserveAlpha?: boolean;
+}
 
 /**
- * Compresses an uploaded image file in the browser using an HTML5 Canvas.
- * Resizes so the longest edge is at most `maxSize` pixels and re-encodes as
- * JPEG at the given quality. Iteratively lowers quality (and, if needed,
- * dimensions) until the output is strictly under 80KB, before converting to
- * a Base64 data URL or uploading to Supabase Storage.
+ * Compresses/resizes an uploaded image file in the browser using an HTML5 Canvas.
+ * Resizes so the longest edge is at most `maxWidth` pixels and re-encodes as
+ * JPEG (or PNG when preserveAlpha is true and the source is a PNG) at the
+ * given quality. Iteratively lowers quality (and, if needed, dimensions) until
+ * the output is under `maxBytes`.
  */
 export function compressImageFile(
   file: File,
-  maxSize = 350,
-  quality = 0.75
+  options: CompressOptions = {}
 ): Promise<File> {
+  const {
+    maxWidth = 1600,
+    quality = 0.92,
+    maxBytes = 2 * 1024 * 1024,
+    preserveAlpha = false,
+  } = options;
+
   return new Promise((resolve) => {
     if (typeof window === "undefined" || !file.type.startsWith("image/")) {
       resolve(file);
       return;
     }
+
+    const usePng = preserveAlpha && file.type === "image/png";
+    const outputType = usePng ? "image/png" : "image/jpeg";
+    const ext = usePng ? ".png" : ".jpg";
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -41,21 +56,25 @@ export function compressImageFile(
           const ctx = canvas.getContext("2d");
           if (!ctx) return Promise.resolve(null);
           ctx.drawImage(img, 0, 0, width, height);
-          return new Promise((res) => canvas.toBlob(res, "image/jpeg", q));
+          // PNG ignores the quality argument; JPEG uses it.
+          return new Promise((res) =>
+            canvas.toBlob(res, outputType, usePng ? undefined : q)
+          );
         };
 
         (async () => {
-          let size = maxSize;
+          let size = maxWidth;
           let q = quality;
           let blob = await drawAt(size, q);
 
-          // Shrink quality first, then dimensions, until under the cap.
+          // Reduce quality first for JPEG, then dimensions, until under cap.
           let attempts = 0;
-          while (blob && blob.size > MAX_BYTES && attempts < 6) {
-            if (q > 0.4) {
-              q -= 0.15;
+          while (blob && blob.size > maxBytes && attempts < 8) {
+            if (!usePng && q > 0.45) {
+              q -= 0.1;
             } else {
-              size = Math.round(size * 0.75);
+              size = Math.round(size * 0.8);
+              if (size < 320) break;
             }
             blob = await drawAt(size, q);
             attempts += 1;
@@ -67,8 +86,8 @@ export function compressImageFile(
           }
           const compressed = new File(
             [blob],
-            file.name.replace(/\.[^.]+$/, ".jpg"),
-            { type: "image/jpeg" }
+            file.name.replace(/\.[^.]+$/, ext),
+            { type: outputType }
           );
           resolve(compressed);
         })();
@@ -81,13 +100,12 @@ export function compressImageFile(
   });
 }
 
-/** Compresses an image file (<80KB) and returns a Base64 data URL. */
+/** Compresses an image file and returns a Base64 data URL. */
 export function compressImageToDataUrl(
   file: File,
-  maxSize = 350,
-  quality = 0.75
+  options?: CompressOptions
 ): Promise<string> {
-  return compressImageFile(file, maxSize, quality).then(
+  return compressImageFile(file, options).then(
     (compressed) =>
       new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -96,4 +114,41 @@ export function compressImageToDataUrl(
         reader.readAsDataURL(compressed);
       })
   );
+}
+
+/** Hero slideshow banners: HD crisp rendering for full-screen banners. */
+export function compressHeroBanner(file: File): Promise<File> {
+  return compressImageFile(file, {
+    maxWidth: 1600,
+    quality: 0.92,
+    maxBytes: 2.5 * 1024 * 1024,
+  });
+}
+
+/** Partner logos: razor-sharp donor logos with transparency preserved. */
+export function compressPartnerLogo(file: File): Promise<File> {
+  return compressImageFile(file, {
+    maxWidth: 800,
+    quality: 0.95,
+    maxBytes: 1.5 * 1024 * 1024,
+    preserveAlpha: true,
+  });
+}
+
+/** Activity & field photos: vibrant, clear field photography. */
+export function compressActivityPhoto(file: File): Promise<File> {
+  return compressImageFile(file, {
+    maxWidth: 1200,
+    quality: 0.88,
+    maxBytes: 2.5 * 1024 * 1024,
+  });
+}
+
+/** Team profile photos: sharp, professional headshots. */
+export function compressTeamPhoto(file: File): Promise<File> {
+  return compressImageFile(file, {
+    maxWidth: 600,
+    quality: 0.9,
+    maxBytes: 1 * 1024 * 1024,
+  });
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Activity } from "@/data/mockData";
+import { mapActivity } from "@/lib/mappers";
 import ActivityCard from "@/components/ActivityCard";
 
 export default function ActivitiesDirectory({
@@ -9,25 +10,47 @@ export default function ActivitiesDirectory({
 }: {
   activities: Activity[];
 }) {
+  const [items, setItems] = useState<Activity[]>(activities);
+
+  useEffect(() => {
+    setItems(activities);
+  }, [activities]);
+
+  // Always refresh from the live Supabase Cloud endpoint so mobile/desktop
+  // visitors see the newest field activities immediately.
+  useEffect(() => {
+    fetch("/api/admin/activities", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const data = (await res.json()) as { activities?: unknown[] };
+        if (data.activities && data.activities.length > 0) {
+          setItems(data.activities.map((a) => mapActivity(a as Parameters<typeof mapActivity>[0])));
+        }
+      })
+      .catch(() => {
+        // Keep the server-rendered initial data on error.
+      });
+  }, []);
+
   const [sector, setSector] = useState("All");
   const [region, setRegion] = useState("All");
 
   const sectors = useMemo(
-    () => ["All", ...Array.from(new Set(activities.map((a) => a.sector)))],
-    [activities]
+    () => ["All", ...Array.from(new Set(items.map((a) => a.sector)))],
+    [items]
   );
   const regions = useMemo(
-    () => ["All", ...Array.from(new Set(activities.map((a) => a.region)))],
-    [activities]
+    () => ["All", ...Array.from(new Set(items.map((a) => a.region)))],
+    [items]
   );
 
   const filtered = useMemo(() => {
-    return activities.filter((activity) => {
+    return items.filter((activity) => {
       const sectorOk = sector === "All" || activity.sector === sector;
       const regionOk = region === "All" || activity.region === region;
       return sectorOk && regionOk;
     });
-  }, [activities, sector, region]);
+  }, [items, sector, region]);
 
   return (
     <div>

@@ -1,5 +1,6 @@
 import { noStoreJson } from "@/lib/apiCache";
 import { requireAdmin, uploadPublicFile } from "@/lib/requireAdmin";
+import { createServiceSupabase } from "@/lib/supabaseAdmin";
 import { slugify } from "@/lib/mappers";
 import { seedActivityRows } from "@/lib/seedData";
 import type { ActivityRow } from "@/lib/types";
@@ -8,13 +9,9 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET() {
-  const { error, supabase } = await requireAdmin();
-  if (error) return error;
+  const supabase = createServiceSupabase();
   if (!supabase) {
-    return noStoreJson(
-      { error: "Supabase is not configured. Add URL and keys to .env.local." },
-      { status: 503 }
-    );
+    return noStoreJson({ activities: [] });
   }
   try {
     // Always sort newest-first by creation time so the latest additions
@@ -84,11 +81,11 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (insertError) {
-      return noStoreJson({ error: insertError.message }, { status: 400 });
+      return noStoreJson({ error: insertError.message, success: false }, { status: 500 });
     }
     return noStoreJson({ activity: data as ActivityRow });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Save failed.";
-    return noStoreJson({ error: message }, { status: 500 });
+    return noStoreJson({ error: message, success: false }, { status: 500 });
   }
 }

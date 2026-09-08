@@ -1,4 +1,7 @@
+export const revalidate = 0;
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
+import { noStoreJson } from "@/lib/apiCache";
 import { requireAdmin } from "@/lib/requireAdmin";
 import type { AdminCredentialRow } from "@/lib/types";
 
@@ -61,11 +64,11 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (upsertError) {
-      return NextResponse.json({ error: upsertError.message }, { status: 400 });
+      return noStoreJson({ error: upsertError.message, success: false }, { status: 500 });
     }
     return NextResponse.json({ credentials: data as AdminCredentialRow });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Save failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return noStoreJson({ error: message, success: false }, { status: 500 });
   }
 }

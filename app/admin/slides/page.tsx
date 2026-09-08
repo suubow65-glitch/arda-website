@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Eye, EyeOff, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { getLocalItem, storageKeys } from "@/lib/storage";
-import { compressImageFile } from "@/lib/imageCompressor";
+import { compressHeroBanner } from "@/lib/imageCompressor";
 import { heroSlides } from "@/data/mockData";
 import type { SlideRow } from "@/lib/types";
 
@@ -114,7 +114,7 @@ export default function SlidesAdminPage() {
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const compressed = await compressImageFile(file);
+    const compressed = await compressHeroBanner(file);
     compressedFileRef.current = compressed;
     const reader = new FileReader();
     reader.onloadend = () => setPreview(reader.result as string);

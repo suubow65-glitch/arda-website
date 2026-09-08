@@ -21,11 +21,11 @@ export async function DELETE(_request: Request, { params }: Params) {
       .delete()
       .eq("id", params.id);
     if (deleteError) {
-      return noStoreJson({ error: deleteError.message }, { status: 400 });
+      return noStoreJson({ error: deleteError.message, success: false }, { status: 500 });
     }
     return noStoreJson({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Delete failed.";
-    return noStoreJson({ error: message }, { status: 500 });
+    return noStoreJson({ error: message, success: false }, { status: 500 });
   }
 }
