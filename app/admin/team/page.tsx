@@ -41,7 +41,7 @@ export default function TeamAdminPage() {
   async function load() {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/team");
+      const res = await fetch("/api/admin/team", { cache: "no-store" });
       if (res.ok) {
         const data = (await res.json()) as { team: TeamMemberRow[] };
         const list = data.team.length ? data.team : getLocalItem<TeamMemberRow[]>(adminKey) || [];
@@ -161,7 +161,7 @@ export default function TeamAdminPage() {
     setItems(next);
     persistAll(next);
     try {
-      const res = await fetch(`/api/admin/team/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/team/${id}`, { cache: "no-store",  method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       setSuccess("Saved Successfully!");

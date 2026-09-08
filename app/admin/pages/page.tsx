@@ -5,7 +5,7 @@ import { Loader2, Pencil, Plus, Trash2, Type } from "lucide-react";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
 import type { PageHeaderRow } from "@/lib/types";
 
-const pageOptions = ["home", "about", "activities", "documents", "careers", "contact", "focus-areas", "gallery"];
+const pageOptions = ["home", "about", "activities", "documents", "careers", "contact", "focus-areas"];
 
 const sectionOptions: Record<string, string[]> = {
   home: ["hero", "stats", "activities", "pillars", "partners"],
@@ -15,7 +15,6 @@ const sectionOptions: Record<string, string[]> = {
   careers: ["hero"],
   contact: ["hero"],
   "focus-areas": ["hero"],
-  gallery: ["hero"],
 };
 
 const empty = {
@@ -40,7 +39,7 @@ export default function PageHeadersAdminPage() {
     setLoading(true);
     const cached = getLocalItem<PageHeaderRow[]>(storageKeys.pageHeaders);
     try {
-      const res = await fetch("/api/admin/pages");
+      const res = await fetch("/api/admin/pages", { cache: "no-store" });
       if (res.ok) {
         const data = (await res.json()) as { headers?: PageHeaderRow[] };
         const list = data.headers || [];
@@ -140,7 +139,7 @@ export default function PageHeadersAdminPage() {
     const next = items.filter((i) => i.id !== id);
     persist(next);
     try {
-      const res = await fetch(`/api/admin/pages/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/pages/${id}`, { cache: "no-store",  method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed.");
     } catch {
       setSuccess("Removed locally.");

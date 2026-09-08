@@ -364,36 +364,7 @@ create policy "Public can read pillars"
   to anon, authenticated
   using (active = true);
 
--- Field photo gallery
 
-create table if not exists public.gallery_photos (
-  id uuid primary key default gen_random_uuid(),
-  title text not null,
-  location text,
-  category text,
-  image_url text not null,
-  date text,
-  featured boolean not null default false,
-  created_at timestamp with time zone not null default now()
-);
-
-alter table public.gallery_photos enable row level security;
-
-drop policy if exists "Public can read gallery_photos" on public.gallery_photos;
-create policy "Public can read gallery_photos"
-  on public.gallery_photos for select
-  to anon, authenticated
-  using (true);
-
-insert into storage.buckets (id, name, public)
-values ('gallery-photos', 'gallery-photos', true)
-on conflict (id) do update set public = true;
-
-drop policy if exists "Public read gallery-photos" on storage.objects;
-create policy "Public read gallery-photos"
-  on storage.objects for select
-  to anon, authenticated
-  using (bucket_id = 'gallery-photos');
 
 -- =====================================================================
 -- WARNING — FULLY OPEN READ/WRITE POLICIES (explicitly requested)
@@ -419,7 +390,7 @@ declare
     'slides', 'activities', 'documents', 'contact_messages',
     'site_settings', 'about_content', 'impact_stats', 'partners',
     'team_members', 'vacancies', 'admin_credentials',
-    'alert_banner', 'page_headers', 'pillars', 'gallery_photos'
+    'alert_banner', 'page_headers', 'pillars'
   ];
 begin
   foreach t in array tables loop
@@ -445,7 +416,7 @@ create policy "Open access storage select"
   using (
     bucket_id in (
       'slide-images', 'activity-images', 'pdf-documents',
-      'partner-logos', 'team-photos', 'vacancy-files', 'gallery-photos'
+      'partner-logos', 'team-photos', 'vacancy-files'
     )
   );
 
@@ -456,7 +427,7 @@ create policy "Open access storage insert"
   with check (
     bucket_id in (
       'slide-images', 'activity-images', 'pdf-documents',
-      'partner-logos', 'team-photos', 'vacancy-files', 'gallery-photos'
+      'partner-logos', 'team-photos', 'vacancy-files'
     )
   );
 
@@ -467,13 +438,13 @@ create policy "Open access storage update"
   using (
     bucket_id in (
       'slide-images', 'activity-images', 'pdf-documents',
-      'partner-logos', 'team-photos', 'vacancy-files', 'gallery-photos'
+      'partner-logos', 'team-photos', 'vacancy-files'
     )
   )
   with check (
     bucket_id in (
       'slide-images', 'activity-images', 'pdf-documents',
-      'partner-logos', 'team-photos', 'vacancy-files', 'gallery-photos'
+      'partner-logos', 'team-photos', 'vacancy-files'
     )
   );
 
@@ -484,6 +455,6 @@ create policy "Open access storage delete"
   using (
     bucket_id in (
       'slide-images', 'activity-images', 'pdf-documents',
-      'partner-logos', 'team-photos', 'vacancy-files', 'gallery-photos'
+      'partner-logos', 'team-photos', 'vacancy-files'
     )
   );

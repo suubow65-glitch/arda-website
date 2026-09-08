@@ -1,12 +1,12 @@
 "use client";
 
-const MAX_BYTES = 50 * 1024; // 50KB hard cap
+const MAX_BYTES = 80 * 1024; // 80KB hard cap
 
 /**
  * Compresses an uploaded image file in the browser using an HTML5 Canvas.
  * Resizes so the longest edge is at most `maxSize` pixels and re-encodes as
  * JPEG at the given quality. Iteratively lowers quality (and, if needed,
- * dimensions) until the output is strictly under 50KB, before converting to
+ * dimensions) until the output is strictly under 80KB, before converting to
  * a Base64 data URL or uploading to Supabase Storage.
  */
 export function compressImageFile(
@@ -81,7 +81,7 @@ export function compressImageFile(
   });
 }
 
-/** Compresses an image file (<50KB) and returns a Base64 data URL. */
+/** Compresses an image file (<80KB) and returns a Base64 data URL. */
 export function compressImageToDataUrl(
   file: File,
   maxSize = 350,

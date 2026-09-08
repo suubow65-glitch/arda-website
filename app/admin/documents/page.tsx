@@ -34,7 +34,7 @@ export default function DocumentsAdminPage() {
       return;
     }
     try {
-      const res = await fetch("/api/admin/documents");
+      const res = await fetch("/api/admin/documents", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load documents.");
       const data = (await res.json()) as { documents: DocumentRow[] };
       setItems(data.documents);
@@ -84,7 +84,7 @@ export default function DocumentsAdminPage() {
     setLocalItem(storageKeys.documents, next.map(mapDocument));
 
     try {
-      const res = await fetch("/api/admin/documents", { method: "POST", body: fd });
+      const res = await fetch("/api/admin/documents", { cache: "no-store",  method: "POST", body: fd });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Upload failed.");
       await load();
@@ -105,7 +105,7 @@ export default function DocumentsAdminPage() {
     setLocalItem(adminKey, next);
     setLocalItem(storageKeys.documents, next.map(mapDocument));
     try {
-      const res = await fetch(`/api/admin/documents/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/documents/${id}`, { cache: "no-store",  method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       await load();

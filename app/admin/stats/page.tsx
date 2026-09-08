@@ -28,7 +28,7 @@ export default function StatsAdminPage() {
       return;
     }
     try {
-      const res = await fetch("/api/admin/impact-stats");
+      const res = await fetch("/api/admin/impact-stats", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load stats.");
       const data = (await res.json()) as { stats: ImpactStatRow[] };
       setItems(data.stats);
@@ -101,7 +101,7 @@ export default function StatsAdminPage() {
     setLocalItem(adminKey, next);
     setLocalItem(storageKeys.impactStats, next.map(mapImpactStat));
     try {
-      const res = await fetch(`/api/admin/impact-stats/${id}`, {
+      const res = await fetch(`/api/admin/impact-stats/${id}`, { cache: "no-store", 
         method: "DELETE",
       });
       const data = (await res.json()) as { error?: string };

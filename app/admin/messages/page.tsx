@@ -22,7 +22,7 @@ export default function MessagesAdminPage() {
       return;
     }
     try {
-      const res = await fetch("/api/admin/messages");
+      const res = await fetch("/api/admin/messages", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load messages.");
       const data = (await res.json()) as { messages: ContactMessageRow[] };
       setItems(data.messages);
@@ -45,7 +45,7 @@ export default function MessagesAdminPage() {
     setItems(next);
     setLocalItem(adminKey, next);
     try {
-      const res = await fetch(`/api/admin/messages/${id}`, {
+      const res = await fetch(`/api/admin/messages/${id}`, { cache: "no-store", 
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ read }),
@@ -66,7 +66,7 @@ export default function MessagesAdminPage() {
     setItems(next);
     setLocalItem(adminKey, next);
     try {
-      const res = await fetch(`/api/admin/messages/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/messages/${id}`, { cache: "no-store",  method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       await load();

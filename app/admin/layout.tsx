@@ -43,7 +43,7 @@ const sections: Section[] = [
     links: [
       { href: "/admin/pillars", label: "Focus Pillars", icon: Target },
       { href: "/admin/activities", label: "Field Activities", icon: FolderOpen },
-      { href: "/admin/gallery", label: "Photo Gallery", icon: Image },
+
     ],
   },
   {
@@ -88,7 +88,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   async function logout() {
-    await fetch("/api/admin/logout", { method: "POST" });
+    await fetch("/api/admin/logout", { cache: "no-store",  method: "POST" });
     router.replace("/admin/login");
     router.refresh();
   }

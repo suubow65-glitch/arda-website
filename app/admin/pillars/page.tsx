@@ -46,7 +46,7 @@ export default function PillarsAdminPage() {
     setLoading(true);
     const cached = getLocalItem<PillarRow[]>(storageKeys.pillars);
     try {
-      const res = await fetch("/api/admin/pillars");
+      const res = await fetch("/api/admin/pillars", { cache: "no-store" });
       if (res.ok) {
         const data = (await res.json()) as { pillars?: PillarRow[] };
         const list = data.pillars || [];
@@ -164,7 +164,7 @@ export default function PillarsAdminPage() {
     const next = items.filter((i) => i.id !== id);
     persist(next);
     try {
-      const res = await fetch(`/api/admin/pillars/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/pillars/${id}`, { cache: "no-store",  method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed.");
     } catch {
       setSuccess("Removed locally.");

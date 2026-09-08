@@ -170,13 +170,4 @@ export type PillarRow = {
   updated_at: string;
 };
 
-export type GalleryPhotoRow = {
-  id: string;
-  title: string;
-  location: string | null;
-  category: string | null;
-  image_url: string;
-  date: string | null;
-  featured: boolean;
-  created_at: string;
-};
+

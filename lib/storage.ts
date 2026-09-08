@@ -41,5 +41,4 @@ export const storageKeys = {
   alertBanner: "arda_public_alert_banner",
   pageHeaders: "arda_public_page_headers",
   pillars: "arda_public_pillars",
-  galleryPhotos: "arda_public_gallery_photos",
 };

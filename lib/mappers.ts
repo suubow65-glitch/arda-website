@@ -6,7 +6,6 @@ import type {
   AlertBannerRow,
   CoreValue,
   DocumentRow,
-  GalleryPhotoRow,
   ImpactStatRow,
   PageHeaderRow,
   PartnerRow,
@@ -208,14 +207,4 @@ export function mapPillar(row: PillarRow) {
 
 export type Pillar = ReturnType<typeof mapPillar>;
 
-export function mapGalleryPhoto(row: GalleryPhotoRow) {
-  return {
-    id: row.id,
-    title: row.title,
-    location: row.location || "",
-    category: row.category || "",
-    image: row.image_url,
-    date: row.date || "",
-    featured: row.featured,
-  };
-}
+

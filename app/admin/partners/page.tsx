@@ -46,7 +46,7 @@ export default function PartnersAdminPage() {
   async function load() {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/partners");
+      const res = await fetch("/api/admin/partners", { cache: "no-store" });
       if (res.ok) {
         const data = (await res.json()) as { partners: PartnerRow[] };
         const list = data.partners.length ? data.partners : getLocalItem<PartnerRow[]>(adminKey) || defaultPartners;
@@ -169,7 +169,7 @@ export default function PartnersAdminPage() {
     setItems(next);
     persistAll(next);
     try {
-      const res = await fetch(`/api/admin/partners/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/partners/${id}`, { cache: "no-store",  method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       setSuccess("Deleted successfully!");

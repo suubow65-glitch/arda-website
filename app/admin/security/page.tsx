@@ -28,7 +28,7 @@ export default function SecurityAdminPage() {
         return;
       }
       try {
-        const res = await fetch("/api/admin/security");
+        const res = await fetch("/api/admin/security", { cache: "no-store" });
         if (!res.ok) throw new Error("Failed to load credentials.");
         const data = (await res.json()) as { credentials: { email: string } | null };
         setEmail(data.credentials?.email || "");
@@ -66,7 +66,7 @@ export default function SecurityAdminPage() {
     setSaving(true);
     setLocalItem(adminKey, { email, passcode: newPasscode, confirm: newPasscode });
     try {
-      const res = await fetch("/api/admin/security", {
+      const res = await fetch("/api/admin/security", { cache: "no-store", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, passcode: newPasscode }),

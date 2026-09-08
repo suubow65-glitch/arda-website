@@ -43,7 +43,7 @@ export default function AboutAdminPage() {
       return;
     }
     try {
-      const res = await fetch("/api/admin/about");
+      const res = await fetch("/api/admin/about", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load about content.");
       const data = (await res.json()) as { about: AboutContentRow | null };
       setVision(data.about?.vision ?? "");
@@ -72,7 +72,7 @@ export default function AboutAdminPage() {
     setLocalItem(adminKey, { vision, mission, values });
     setLocalItem(storageKeys.about, { vision, mission, coreValues: values });
     try {
-      const res = await fetch("/api/admin/about", {
+      const res = await fetch("/api/admin/about", { cache: "no-store", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ vision, mission, core_values: values }),

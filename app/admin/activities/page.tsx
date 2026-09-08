@@ -97,7 +97,7 @@ export default function ActivitiesAdminPage() {
       return;
     }
     try {
-      const res = await fetch("/api/admin/activities");
+      const res = await fetch("/api/admin/activities", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load activities.");
       const data = (await res.json()) as { activities: ActivityRow[] };
       const list = data.activities.length ? data.activities : defaultActivities;
@@ -233,7 +233,7 @@ export default function ActivitiesAdminPage() {
     setItems(ordered);
     persistActivities(ordered);
     try {
-      const res = await fetch(`/api/admin/activities/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/activities/${id}`, { cache: "no-store",  method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       await load();

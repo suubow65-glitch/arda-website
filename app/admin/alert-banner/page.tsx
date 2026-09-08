@@ -27,7 +27,7 @@ export default function AlertBannerAdminPage() {
     setLoading(true);
     const cached = getLocalItem<AlertBannerRow>(storageKeys.alertBanner);
     try {
-      const res = await fetch("/api/admin/alert-banner");
+      const res = await fetch("/api/admin/alert-banner", { cache: "no-store" });
       if (res.ok) {
         const data = (await res.json()) as { banners?: AlertBannerRow[] };
         const first = data.banners?.[0];

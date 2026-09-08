@@ -13,7 +13,7 @@ export default function LoginForm() {
     setError("");
     setLoading(true);
     const form = new FormData(event.currentTarget);
-    const response = await fetch("/api/admin/login", {
+    const response = await fetch("/api/admin/login", { cache: "no-store", 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

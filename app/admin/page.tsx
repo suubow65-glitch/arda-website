@@ -23,7 +23,7 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/admin/stats")
+    fetch("/api/admin/stats", { cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) throw new Error("Unable to load dashboard stats.");
         const data = (await res.json()) as Stats;

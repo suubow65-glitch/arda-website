@@ -16,7 +16,6 @@ import {
   mapActivity,
   mapAlertBanner,
   mapDocument,
-  mapGalleryPhoto,
   mapImpactStat,
   mapPageHeader,
   mapPartner,
@@ -32,7 +31,6 @@ import type {
   ActivityRow,
   AlertBannerRow,
   DocumentRow,
-  GalleryPhotoRow,
   ImpactStatRow,
   PageHeaderRow,
   PartnerRow,
@@ -482,31 +480,7 @@ export async function getPillars() {
   })) as ReturnType<typeof mapPillar>[];
 }
 
-export async function getGalleryPhotos(featuredOnly = false) {
-  if (isSupabaseConfigured()) {
-    try {
-      const supabase = createSupabaseClient();
-      if (supabase) {
-        let query = supabase
-          .from("gallery_photos")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (featuredOnly) query = query.eq("featured", true);
-        const { data, error } = await query;
-        if (!error && data) {
-          return (data as GalleryPhotoRow[]).map(mapGalleryPhoto);
-        }
-      }
-    } catch {
-      // fall through
-    }
-  }
-  const cached = getLocalItem<ReturnType<typeof mapGalleryPhoto>[]>(
-    storageKeys.galleryPhotos
-  );
-  if (cached) return cached;
-  return [];
-}
+
 
 export async function submitContactMessage(input: {
   name: string;

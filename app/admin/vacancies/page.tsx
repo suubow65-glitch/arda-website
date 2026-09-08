@@ -37,7 +37,7 @@ export default function VacanciesAdminPage() {
       return;
     }
     try {
-      const res = await fetch("/api/admin/vacancies");
+      const res = await fetch("/api/admin/vacancies", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load vacancies.");
       const data = (await res.json()) as { vacancies: VacancyRow[] };
       setItems(data.vacancies);
@@ -120,7 +120,7 @@ export default function VacanciesAdminPage() {
     setLocalItem(adminKey, next);
     setLocalItem(storageKeys.vacancies, next.map(mapVacancy));
     try {
-      const res = await fetch(`/api/admin/vacancies/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/vacancies/${id}`, { cache: "no-store",  method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       await load();

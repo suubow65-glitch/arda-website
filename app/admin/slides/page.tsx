@@ -93,7 +93,7 @@ export default function SlidesAdminPage() {
       return;
     }
     try {
-      const res = await fetch("/api/admin/slides");
+      const res = await fetch("/api/admin/slides", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load slides.");
       const data = (await res.json()) as { slides: SlideRow[] };
       const list = data.slides.length ? data.slides : defaultSlides;
@@ -238,7 +238,7 @@ export default function SlidesAdminPage() {
     const fd = new FormData();
     fd.set("active", item.active ? "true" : "false");
     try {
-      const res = await fetch(`/api/admin/slides/${id}`, {
+      const res = await fetch(`/api/admin/slides/${id}`, { cache: "no-store", 
         method: "PATCH",
         body: fd,
       });
@@ -256,7 +256,7 @@ export default function SlidesAdminPage() {
     setItems(next);
     persistSlides(next);
     try {
-      const res = await fetch(`/api/admin/slides/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/slides/${id}`, { cache: "no-store",  method: "DELETE" });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Delete failed.");
     } catch {

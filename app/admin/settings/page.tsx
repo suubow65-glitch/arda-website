@@ -45,7 +45,7 @@ export default function SettingsAdminPage() {
       return;
     }
     try {
-      const res = await fetch("/api/admin/settings");
+      const res = await fetch("/api/admin/settings", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load settings.");
       const data = (await res.json()) as { settings: SiteSettingsRow | null };
       setForm(data.settings ?? empty);
@@ -68,7 +68,7 @@ export default function SettingsAdminPage() {
     setLocalItem(adminKey, form);
     setLocalItem(storageKeys.settings, mapSiteSettings(form as any));
     try {
-      const res = await fetch("/api/admin/settings", {
+      const res = await fetch("/api/admin/settings", { cache: "no-store", 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
