@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2, Type } from "lucide-react";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
+import { getBrowserSupabase } from "@/lib/supabaseBrowser";
 import type { PageHeaderRow } from "@/lib/types";
 
 const pageOptions = ["home", "about", "activities", "documents", "careers", "contact", "focus-areas"];
@@ -25,6 +26,10 @@ const empty = {
   description: "",
 };
 
+function isUuid(id: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 export default function PageHeadersAdminPage() {
   const [items, setItems] = useState<PageHeaderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +42,24 @@ export default function PageHeadersAdminPage() {
 
   async function load() {
     setLoading(true);
-    const cached = getLocalItem<PageHeaderRow[]>(storageKeys.pageHeaders);
+    const supabase = getBrowserSupabase();
+    if (supabase) {
+      try {
+        const { data, error: qErr } = await supabase
+          .from("page_headers")
+          .select("*")
+          .order("page_key", { ascending: true });
+        if (!qErr && data && data.length > 0) {
+          setItems(data as PageHeaderRow[]);
+          setLocalItem(storageKeys.pageHeaders, data);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // fallback
+      }
+    }
+
     try {
       const res = await fetch("/api/admin/pages", { cache: "no-store" });
       if (res.ok) {
@@ -51,6 +73,8 @@ export default function PageHeadersAdminPage() {
     } catch {
       // ignore
     }
+
+    const cached = getLocalItem<PageHeaderRow[]>(storageKeys.pageHeaders);
     if (cached) setItems(cached);
     setLoading(false);
   }
@@ -95,23 +119,58 @@ export default function PageHeadersAdminPage() {
     setError("");
     setSuccess("");
 
-    const nextItem: PageHeaderRow = editing
-      ? { ...editing, ...form }
-      : { ...empty, ...form, id: String(Date.now()), created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-
-    const next = editing
-      ? items.map((i) => (i.id === editing.id ? nextItem : i))
-      : [...items, nextItem];
-    persist(next);
-
-    const fd = new FormData();
-    fd.set("page_key", form.page_key);
-    fd.set("section_key", form.section_key);
-    fd.set("title", form.title);
-    fd.set("subtitle", form.subtitle);
-    fd.set("description", form.description);
+    const supabase = getBrowserSupabase();
 
     try {
+      const payload = {
+        page_key: form.page_key,
+        section_key: form.section_key,
+        title: form.title,
+        subtitle: form.subtitle || null,
+        description: form.description || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (supabase) {
+        let resultRow: PageHeaderRow | null = null;
+        if (editing && isUuid(editing.id)) {
+          const { data, error: updateError } = await supabase
+            .from("page_headers")
+            .update(payload)
+            .eq("id", editing.id)
+            .select("*")
+            .single();
+          if (updateError) throw new Error(updateError.message);
+          resultRow = data as PageHeaderRow;
+        } else {
+          const { data, error: insertError } = await supabase
+            .from("page_headers")
+            .insert(payload)
+            .select("*")
+            .single();
+          if (insertError) throw new Error(insertError.message);
+          resultRow = data as PageHeaderRow;
+        }
+
+        if (resultRow) {
+          const synced = editing
+            ? items.map((i) => (i.id === editing.id ? resultRow! : i))
+            : [...items, resultRow];
+          persist(synced);
+        }
+
+        setSuccess("Saved Live to Supabase Cloud!");
+        reset();
+        return;
+      }
+
+      const fd = new FormData();
+      fd.set("page_key", form.page_key);
+      fd.set("section_key", form.section_key);
+      fd.set("title", form.title);
+      fd.set("subtitle", form.subtitle);
+      fd.set("description", form.description);
+
       const url = editing ? `/api/admin/pages/${editing.id}` : "/api/admin/pages";
       const method = editing ? "PATCH" : "POST";
       const res = await fetch(url, { method, body: fd });
@@ -123,12 +182,11 @@ export default function PageHeadersAdminPage() {
           : [...items, data.header!];
         persist(synced);
       }
-      setSuccess("Page header saved!");
+      setSuccess("Saved Live to Supabase Cloud!");
       reset();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Saved locally (cloud unavailable).";
-      setSuccess(message);
-      reset();
+      const msg = err instanceof Error ? err.message : "Cloud write failed.";
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -136,11 +194,31 @@ export default function PageHeadersAdminPage() {
 
   async function remove(id: string) {
     if (!confirm("Delete this page header?")) return;
-    const next = items.filter((i) => i.id !== id);
-    persist(next);
+    setError("");
+    setSuccess("");
+
+    const supabase = getBrowserSupabase();
+    if (supabase && isUuid(id)) {
+      try {
+        const { error: delErr } = await supabase.from("page_headers").delete().eq("id", id);
+        if (delErr) throw new Error(delErr.message);
+        const next = items.filter((i) => i.id !== id);
+        persist(next);
+        setSuccess("Saved Live to Supabase Cloud! (Deleted)");
+        return;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Cloud delete failed.";
+        setError(msg);
+        return;
+      }
+    }
+
     try {
-      const res = await fetch(`/api/admin/pages/${id}`, { cache: "no-store",  method: "DELETE" });
+      const res = await fetch(`/api/admin/pages/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed.");
+      const next = items.filter((i) => i.id !== id);
+      persist(next);
+      setSuccess("Saved Live to Supabase Cloud! (Deleted)");
     } catch {
       setSuccess("Removed locally.");
     }
@@ -162,10 +240,14 @@ export default function PageHeadersAdminPage() {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 shadow-sm">
+          ⚠️ Cloud error: {error}
+        </div>
       )}
       {success && (
-        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</p>
+        <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-700 shadow-sm">
+          ✓ {success}
+        </div>
       )}
 
       {open && (
@@ -232,7 +314,7 @@ export default function PageHeadersAdminPage() {
           </label>
           <div className="flex gap-2 sm:col-span-2">
             <button type="submit" className="btn-action" disabled={saving}>
-              {saving ? "Saving…" : editing ? "Update header" : "Create header"}
+              {saving ? "Saving Live to Cloud…" : editing ? "Update header" : "Create header"}
             </button>
             <button
               type="button"

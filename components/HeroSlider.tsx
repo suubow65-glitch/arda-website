@@ -6,14 +6,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { heroSlides } from "@/data/mockData";
 import { mapSlide } from "@/lib/mappers";
-import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
+import { setLocalItem, storageKeys } from "@/lib/storage";
+import { getBrowserSupabase } from "@/lib/supabaseBrowser";
 import SafeImage from "@/components/SafeImage";
 import type { HeroSlide } from "@/data/mockData";
 import type { SlideRow } from "@/lib/types";
 
 const INTERVAL = 7000;
 const API_URL = "/api/admin/slides";
-const customKey = "arda_user_custom_slides_v1";
 
 export default function HeroSlider() {
   const [slides, setSlides] = useState<HeroSlide[]>(heroSlides);
@@ -23,13 +23,6 @@ export default function HeroSlider() {
   useEffect(() => {
     slidesRef.current = slides;
   }, [slides]);
-
-  const persistRows = useCallback((rows: SlideRow[]) => {
-    const publicSlides = rows.map(mapSlide);
-    setLocalItem(storageKeys.slides, publicSlides);
-    localStorage.setItem("arda_admin_slides_list", JSON.stringify(rows));
-    localStorage.setItem("arda_slides_override", JSON.stringify(rows));
-  }, []);
 
   const parseRows = useCallback((rows: unknown[]): HeroSlide[] | null => {
     const active = rows
@@ -41,44 +34,31 @@ export default function HeroSlider() {
     return active.length > 0 ? active : null;
   }, []);
 
-  const loadFromStorage = useCallback((): HeroSlide[] | null => {
-    if (typeof window === "undefined") return null;
-
-    try {
-      const customRaw = localStorage.getItem(customKey);
-      if (customRaw) {
-        const custom = JSON.parse(customRaw) as {
-          userModified?: boolean;
-          slides?: unknown[];
-        };
-        if (
-          custom.userModified &&
-          Array.isArray(custom.slides) &&
-          custom.slides.length > 0
-        ) {
-          const active = parseRows(custom.slides);
-          if (active) return active;
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    const raw =
-      localStorage.getItem("arda_slides_override") ||
-      localStorage.getItem("arda_admin_slides_list") ||
-      localStorage.getItem(storageKeys.slides);
-    if (!raw) return null;
-    try {
-      const parsed = JSON.parse(raw) as unknown[];
-      if (!Array.isArray(parsed) || parsed.length === 0) return null;
-      return parseRows(parsed);
-    } catch {
-      return null;
-    }
-  }, [parseRows]);
+  const persistRows = useCallback((rows: SlideRow[]) => {
+    const publicSlides = rows.map(mapSlide);
+    setLocalItem(storageKeys.slides, publicSlides);
+    localStorage.setItem("arda_admin_slides_list", JSON.stringify(rows));
+    localStorage.setItem("arda_slides_override", JSON.stringify(rows));
+  }, []);
 
   useEffect(() => {
+    async function loadDirectFromCloud(): Promise<SlideRow[] | null> {
+      try {
+        const supabase = getBrowserSupabase();
+        const { data, error } = await supabase
+          .from("slides")
+          .select("*")
+          .eq("active", true)
+          .order("order_index", { ascending: true });
+        if (!error && data && data.length > 0) {
+          return data as SlideRow[];
+        }
+      } catch {
+        // fallback to api
+      }
+      return null;
+    }
+
     async function loadFromApi(): Promise<SlideRow[] | null> {
       try {
         const res = await fetch(API_URL, { cache: "no-store" });
@@ -93,42 +73,40 @@ export default function HeroSlider() {
     }
 
     async function init() {
-      const rows = await loadFromApi();
-      if (rows) {
-        const active = parseRows(rows);
+      // 1) Direct Supabase Cloud query first (identical to Activities & Partners)
+      const cloudRows = await loadDirectFromCloud();
+      if (cloudRows && cloudRows.length > 0) {
+        const active = parseRows(cloudRows);
         if (active) {
           setSlides(active);
-          persistRows(rows);
+          persistRows(cloudRows);
           return;
         }
       }
-      const cached = loadFromStorage();
-      if (cached) setSlides(cached);
+
+      // 2) Public API route fallback with no-store
+      const apiRows = await loadFromApi();
+      if (apiRows && apiRows.length > 0) {
+        const active = parseRows(apiRows);
+        if (active) {
+          setSlides(active);
+          persistRows(apiRows);
+          return;
+        }
+      }
     }
 
     init();
 
-    const onStorage = (e: StorageEvent) => {
-      if (
-        e.key === customKey ||
-        e.key === "arda_slides_override" ||
-        e.key === "arda_admin_slides_list" ||
-        e.key === storageKeys.slides
-      ) {
-        init();
-      }
-    };
-
     const onUpdate = () => init();
-
-    window.addEventListener("storage", onStorage);
+    window.addEventListener("storage", onUpdate);
     window.addEventListener("arda-slides-updated", onUpdate);
 
     return () => {
-      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("storage", onUpdate);
       window.removeEventListener("arda-slides-updated", onUpdate);
     };
-  }, [loadFromStorage, parseRows, persistRows]);
+  }, [parseRows, persistRows]);
 
   const go = useCallback((direction: number) => {
     setIndex((current) => {
@@ -189,11 +167,11 @@ export default function HeroSlider() {
               {slide.description}
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href={slide.primaryCta.href} className="btn-action">
-                {slide.primaryCta.label}
+              <Link href="/contact" className="btn-action">
+                {slide.primaryCta.label || "Partner With Us"}
               </Link>
-              <Link href={slide.secondaryCta.href} className="btn-outline">
-                {slide.secondaryCta.label}
+              <Link href={slide.secondaryCta.href || "/about"} className="btn-outline">
+                {slide.secondaryCta.label || "About ARDA"}
               </Link>
             </div>
           </motion.div>

@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2, Target } from "lucide-react";
 import { getLocalItem, setLocalItem, storageKeys } from "@/lib/storage";
+import { getBrowserSupabase } from "@/lib/supabaseBrowser";
 import type { PillarRow } from "@/lib/types";
 
 const iconOptions = [
@@ -32,6 +33,10 @@ const empty = {
   active: true,
 };
 
+function isUuid(id: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 export default function PillarsAdminPage() {
   const [items, setItems] = useState<PillarRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +49,24 @@ export default function PillarsAdminPage() {
 
   async function load() {
     setLoading(true);
-    const cached = getLocalItem<PillarRow[]>(storageKeys.pillars);
+    const supabase = getBrowserSupabase();
+    if (supabase) {
+      try {
+        const { data, error: qErr } = await supabase
+          .from("pillars")
+          .select("*")
+          .order("order_index", { ascending: true });
+        if (!qErr && data && data.length > 0) {
+          setItems(data as PillarRow[]);
+          setLocalItem(storageKeys.pillars, data);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // fallback
+      }
+    }
+
     try {
       const res = await fetch("/api/admin/pillars", { cache: "no-store" });
       if (res.ok) {
@@ -58,6 +80,8 @@ export default function PillarsAdminPage() {
     } catch {
       // ignore
     }
+
+    const cached = getLocalItem<PillarRow[]>(storageKeys.pillars);
     if (cached) setItems(cached);
     setLoading(false);
   }
@@ -110,33 +134,64 @@ export default function PillarsAdminPage() {
       .map((i) => i.trim())
       .filter(Boolean);
 
-    const nextItem: PillarRow = editing
-      ? { ...editing, ...form, interventions }
-      : {
-          ...empty,
-          ...form,
-          interventions,
-          id: String(Date.now()),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-
-    const next = editing
-      ? items.map((i) => (i.id === editing.id ? nextItem : i))
-      : [...items, nextItem];
-    persist(next);
-
-    const fd = new FormData();
-    fd.set("title", form.title);
-    fd.set("category_slug", form.category_slug);
-    fd.set("icon_name", form.icon_name);
-    fd.set("short_desc", form.short_desc);
-    fd.set("full_content", form.full_content);
-    fd.set("interventions", form.interventions);
-    fd.set("order_index", String(form.order_index));
-    fd.set("active", form.active ? "true" : "false");
+    const supabase = getBrowserSupabase();
 
     try {
+      const payload = {
+        title: form.title,
+        category_slug: form.category_slug,
+        icon_name: form.icon_name,
+        short_desc: form.short_desc,
+        full_content: form.full_content,
+        interventions,
+        order_index: Number(form.order_index),
+        active: Boolean(form.active),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (supabase) {
+        let resultRow: PillarRow | null = null;
+        if (editing && isUuid(editing.id)) {
+          const { data, error: updateError } = await supabase
+            .from("pillars")
+            .update(payload)
+            .eq("id", editing.id)
+            .select("*")
+            .single();
+          if (updateError) throw new Error(updateError.message);
+          resultRow = data as PillarRow;
+        } else {
+          const { data, error: insertError } = await supabase
+            .from("pillars")
+            .insert(payload)
+            .select("*")
+            .single();
+          if (insertError) throw new Error(insertError.message);
+          resultRow = data as PillarRow;
+        }
+
+        if (resultRow) {
+          const synced = editing
+            ? items.map((i) => (i.id === editing.id ? resultRow! : i))
+            : [...items, resultRow];
+          persist(synced);
+        }
+
+        setSuccess("Saved Live to Supabase Cloud!");
+        reset();
+        return;
+      }
+
+      const fd = new FormData();
+      fd.set("title", form.title);
+      fd.set("category_slug", form.category_slug);
+      fd.set("icon_name", form.icon_name);
+      fd.set("short_desc", form.short_desc);
+      fd.set("full_content", form.full_content);
+      fd.set("interventions", form.interventions);
+      fd.set("order_index", String(form.order_index));
+      fd.set("active", form.active ? "true" : "false");
+
       const url = editing ? `/api/admin/pillars/${editing.id}` : "/api/admin/pillars";
       const method = editing ? "PATCH" : "POST";
       const res = await fetch(url, { method, body: fd });
@@ -148,12 +203,11 @@ export default function PillarsAdminPage() {
           : [...items, data.pillar!];
         persist(synced);
       }
-      setSuccess("Pillar saved!");
+      setSuccess("Saved Live to Supabase Cloud!");
       reset();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Saved locally (cloud unavailable).";
-      setSuccess(message);
-      reset();
+      const msg = err instanceof Error ? err.message : "Cloud write failed.";
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -161,11 +215,31 @@ export default function PillarsAdminPage() {
 
   async function remove(id: string) {
     if (!confirm("Delete this pillar?")) return;
-    const next = items.filter((i) => i.id !== id);
-    persist(next);
+    setError("");
+    setSuccess("");
+
+    const supabase = getBrowserSupabase();
+    if (supabase && isUuid(id)) {
+      try {
+        const { error: delErr } = await supabase.from("pillars").delete().eq("id", id);
+        if (delErr) throw new Error(delErr.message);
+        const next = items.filter((i) => i.id !== id);
+        persist(next);
+        setSuccess("Saved Live to Supabase Cloud! (Deleted)");
+        return;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Cloud delete failed.";
+        setError(msg);
+        return;
+      }
+    }
+
     try {
-      const res = await fetch(`/api/admin/pillars/${id}`, { cache: "no-store",  method: "DELETE" });
+      const res = await fetch(`/api/admin/pillars/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed.");
+      const next = items.filter((i) => i.id !== id);
+      persist(next);
+      setSuccess("Saved Live to Supabase Cloud! (Deleted)");
     } catch {
       setSuccess("Removed locally.");
     }
@@ -187,10 +261,14 @@ export default function PillarsAdminPage() {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 shadow-sm">
+          ⚠️ Cloud error: {error}
+        </div>
       )}
       {success && (
-        <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</p>
+        <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-700 shadow-sm">
+          ✓ {success}
+        </div>
       )}
 
       {open && (
@@ -284,7 +362,7 @@ export default function PillarsAdminPage() {
           </label>
           <div className="flex gap-2">
             <button type="submit" className="btn-action" disabled={saving}>
-              {saving ? "Saving…" : editing ? "Update pillar" : "Create pillar"}
+              {saving ? "Saving Live to Cloud…" : editing ? "Update pillar" : "Create pillar"}
             </button>
             <button
               type="button"
