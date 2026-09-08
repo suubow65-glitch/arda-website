@@ -532,5 +532,5 @@ export const navLinks = [
   { href: "/activities", label: "Activities" },
   { href: "/documents", label: "Documents/Reports" },
   { href: "/careers", label: "Careers" },
-  { href: "/contact", label: "Contact Us" },
+  { href: "/contact", label: "Partner With Us" },
 ];
