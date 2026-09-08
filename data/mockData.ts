@@ -532,5 +532,9 @@ export const navLinks = [
   { href: "/activities", label: "Activities" },
   { href: "/documents", label: "Documents/Reports" },
   { href: "/careers", label: "Careers" },
+];
+
+export const footerQuickLinks = [
+  ...navLinks,
   { href: "/contact", label: "Partner With Us" },
 ];

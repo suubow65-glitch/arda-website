@@ -11,7 +11,7 @@ import {
   Phone,
   Twitter,
 } from "lucide-react";
-import { navLinks } from "@/data/mockData";
+import { footerQuickLinks } from "@/data/mockData";
 import SafeImage from "@/components/SafeImage";
 import { getSiteSettings } from "@/lib/content";
 import { mapSiteSettings } from "@/lib/mappers";
@@ -51,7 +51,7 @@ export default function Footer() {
             Quick Links
           </h2>
           <ul className="mt-4 space-y-2">
-            {navLinks.map((link) => (
+            {footerQuickLinks.map((link) => (
               <li key={link.href}>
                 <Link
                   href={link.href}
